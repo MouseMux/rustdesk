@@ -25,6 +25,129 @@ cargo build --release
 
 ---
 
+## MouseMux Integration Implementation Status
+
+### About This Build
+
+**RustDesk (MouseMux compliant edition)** is a modified version of RustDesk that enables multiple people to connect to one host simultaneously and collaborate in real-time through MouseMux.
+
+With MouseMux integration, each connected user can have their own independent mouse cursor and keyboard control, allowing true multi-user collaboration on a single Windows host machine. This is perfect for:
+- Pair programming and code reviews
+- Collaborative design and editing
+- Remote training and demonstrations
+- Technical support with multiple technicians
+
+**Visit [mousemux.com](https://mousemux.com) for more information about MouseMux and how to set it up.**
+
+---
+
+### ✅ Completed Components
+
+1. **Enigo Library (libs/enigo/src/win/win_impl.rs)**
+   - ✅ Added MouseMux state field to Enigo struct
+   - ✅ Implemented `enable_mousemux(version)` method
+   - ✅ Implemented `disable_mousemux()` method
+   - ✅ Implemented `is_mousemux_enabled()` method
+   - ✅ Modified all `mouse_event()` calls to use MouseMux ID when enabled
+   - ✅ Modified all `keybd_event()` calls to use MouseMux ID when enabled
+   - ✅ Win32 API integration for window detection and messaging
+
+2. **Input Service (src/server/input_service.rs)**
+   - ✅ Added global `enable_mousemux(version)` function
+   - ✅ Added global `disable_mousemux()` function
+   - ✅ Added global `is_mousemux_enabled()` function
+   - ✅ Functions control the shared ENIGO static instance
+
+### 🔄 Programmatic Usage (Available Now)
+
+To enable MouseMux programmatically from Rust code:
+
+```rust
+#[cfg(windows)]
+use crate::server::input_service;
+
+// Enable MouseMux (call when connection starts or user enables it)
+let rustdesk_version = 142; // 1.4.2 as integer
+if input_service::enable_mousemux(rustdesk_version) {
+    log::info!("MouseMux enabled successfully");
+} else {
+    log::warn!("MouseMux not available or failed to enable");
+}
+
+// Disable MouseMux (call when connection ends or user disables it)
+input_service::disable_mousemux();
+
+// Check status
+if input_service::is_mousemux_enabled() {
+    log::info!("MouseMux is currently enabled");
+}
+```
+
+### ⏳ Pending Components
+
+1. **UI Integration (Sciter)**
+   - ❌ Checkbox in remote desktop UI not yet implemented
+   - ❌ Message handler for UI toggle not yet implemented
+   - **Workaround:** Can be enabled programmatically or via config file
+
+2. **Connection Lifecycle Integration**
+   - ❌ Automatic enable on connection start (if configured)
+   - ❌ Automatic disable on connection end
+   - **Workaround:** Can be manually called in connection setup
+
+### 📝 Implementation Notes for Future Work
+
+#### Adding UI Checkbox (Sciter)
+
+To add a checkbox to the Sciter UI:
+
+1. **Location:** `src/ui/remote.tis` - Remote desktop toolbar/menu
+2. **Add checkbox element:**
+   ```tis
+   <checkbox #mousemux-enabled>MouseMux enabled</checkbox>
+   ```
+3. **Add event handler:**
+   ```tis
+   self.select("#mousemux-enabled").on("click", function() {
+       var enabled = this.value;
+       view.set_mousemux_enabled(enabled);
+   });
+   ```
+4. **Rust handler in `src/ui/remote.rs`:**
+   ```rust
+   pub fn set_mousemux_enabled(&mut self, enabled: bool) {
+       #[cfg(windows)]
+       {
+           if enabled {
+               crate::server::input_service::enable_mousemux(142);
+           } else {
+               crate::server::input_service::disable_mousemux();
+           }
+       }
+   }
+   ```
+
+#### Connection Lifecycle Integration
+
+In `src/server/connection.rs`, add to connection start:
+```rust
+#[cfg(windows)]
+{
+    // Check if MouseMux should be enabled (from config or default)
+    if Config::get_option("enable_mousemux").is_empty() == false {
+        crate::server::input_service::enable_mousemux(142);
+    }
+}
+```
+
+In `Connection::drop()` or connection cleanup:
+```rust
+#[cfg(windows)]
+crate::server::input_service::disable_mousemux();
+```
+
+---
+
 ## MouseMux Integration Feature Specification
 
 ### Overview
