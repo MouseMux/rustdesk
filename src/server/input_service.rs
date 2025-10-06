@@ -445,6 +445,32 @@ lazy_static::lazy_static! {
 }
 static EXITING: AtomicBool = AtomicBool::new(false);
 
+// MouseMux integration helper functions
+#[cfg(windows)]
+pub fn enable_mousemux(rustdesk_version: u32) -> bool {
+    if let Ok(mut enigo) = ENIGO.lock() {
+        enigo.enable_mousemux(rustdesk_version)
+    } else {
+        false
+    }
+}
+
+#[cfg(windows)]
+pub fn disable_mousemux() {
+    if let Ok(mut enigo) = ENIGO.lock() {
+        enigo.disable_mousemux();
+    }
+}
+
+#[cfg(windows)]
+pub fn is_mousemux_enabled() -> bool {
+    if let Ok(enigo) = ENIGO.lock() {
+        enigo.is_mousemux_enabled()
+    } else {
+        false
+    }
+}
+
 const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
 // Actual diff of (x,y) is (1,1) here. But 5 may be tolerant.
 const MOUSE_ACTIVE_DISTANCE: i32 = 5;
