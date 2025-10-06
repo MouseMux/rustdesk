@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(cmd //c:*)",
+      "Read(//c/msys64/**)",
+      "Bash(./msys2_shell.cmd -defterm -no-start -mingw64 -c \"which python\")",
+      "Bash(/mingw64/bin/python:*)",
+      "Bash(/c/msys64/mingw64/bin/python:*)",
+      "Bash(where python)",
+      "Bash(/c/Users/Developer/AppData/Local/Programs/Python/Python313/python.exe build.py --flutter)",
+      "Read(//c/Users/Developer/AppData/Local/Programs/Python/Python313//**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

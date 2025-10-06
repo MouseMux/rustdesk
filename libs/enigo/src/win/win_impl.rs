@@ -1,5 +1,5 @@
 use self::winapi::ctypes::c_int;
-use self::winapi::shared::{basetsd::ULONG_PTR, minwindef::*, windef::*};
+use self::winapi::shared::{basetsd::{ULONG_PTR, DWORD_PTR}, minwindef::*, windef::*};
 use self::winapi::um::winbase::*;
 use self::winapi::um::winuser::*;
 use winapi;
@@ -14,13 +14,24 @@ extern "system" {
 
 /// The main struct for handling the event emitting
 #[derive(Default)]
-pub struct Enigo;
+pub struct Enigo {
+    mousemux_input_id: Option<ULONG_PTR>,
+}
+
 static mut LAYOUT: HKL = std::ptr::null_mut();
 
 /// The dwExtraInfo value in keyboard and mouse structure that used in SendInput()
 pub const ENIGO_INPUT_EXTRA_VALUE: ULONG_PTR = 100;
 
-fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32) -> DWORD {
+// MouseMux integration constants
+const MOUSEMUX_WINDOW_CLASS: &str = "mousemux.main.window.query";
+const MOUSEMUX_MSG_REGISTER: u32 = WM_APP + 20;    // 0x8014
+const MOUSEMUX_MSG_UNREGISTER: u32 = WM_APP + 24;  // 0x8018
+const MOUSEMUX_ID_MIN: ULONG_PTR = 6000;
+const MOUSEMUX_ID_MAX: ULONG_PTR = 6200;
+const MOUSEMUX_TIMEOUT_MS: u32 = 5000;
+
+fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32, extra_info: ULONG_PTR) -> DWORD {
     let mut u = INPUT_u::default();
     unsafe {
         *u.mi_mut() = MOUSEINPUT {
@@ -29,7 +40,7 @@ fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32) -> DWORD {
             mouseData: data,
             dwFlags: flags,
             time: 0,
-            dwExtraInfo: ENIGO_INPUT_EXTRA_VALUE,
+            dwExtraInfo: extra_info,
         };
     }
     let mut input = INPUT {
@@ -39,7 +50,7 @@ fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32) -> DWORD {
     unsafe { SendInput(1, &mut input as LPINPUT, size_of::<INPUT>() as c_int) }
 }
 
-fn keybd_event(mut flags: u32, vk: u16, scan: u16) -> DWORD {
+fn keybd_event(mut flags: u32, vk: u16, scan: u16, extra_info: ULONG_PTR) -> DWORD {
     let mut scan = scan;
     unsafe {
         // https://github.com/rustdesk/rustdesk/issues/366
@@ -65,7 +76,7 @@ fn keybd_event(mut flags: u32, vk: u16, scan: u16) -> DWORD {
             wScan: scan,
             dwFlags: flags,
             time: 0,
-            dwExtraInfo: ENIGO_INPUT_EXTRA_VALUE,
+            dwExtraInfo: extra_info,
         };
     }
     let mut inputs = [INPUT {
@@ -126,6 +137,7 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_move_to(&mut self, x: i32, y: i32) {
+        let extra_info = self.get_extra_info();
         mouse_event(
             MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
             0,
@@ -133,14 +145,17 @@ impl MouseControllable for Enigo {
                 / unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) },
             (y - unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) }) * 65535
                 / unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) },
+            extra_info,
         );
     }
 
     fn mouse_move_relative(&mut self, x: i32, y: i32) {
-        mouse_event(MOUSEEVENTF_MOVE, 0, x, y);
+        let extra_info = self.get_extra_info();
+        mouse_event(MOUSEEVENTF_MOVE, 0, x, y, extra_info);
     }
 
     fn mouse_down(&mut self, button: MouseButton) -> crate::ResultType {
+        let extra_info = self.get_extra_info();
         let res = mouse_event(
             match button {
                 MouseButton::Left => MOUSEEVENTF_LEFTDOWN,
@@ -160,6 +175,7 @@ impl MouseControllable for Enigo {
             },
             0,
             0,
+            extra_info,
         );
         if res == 0 {
             let err = get_error();
@@ -171,6 +187,7 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_up(&mut self, button: MouseButton) {
+        let extra_info = self.get_extra_info();
         mouse_event(
             match button {
                 MouseButton::Left => MOUSEEVENTF_LEFTUP,
@@ -190,6 +207,7 @@ impl MouseControllable for Enigo {
             },
             0,
             0,
+            extra_info,
         );
     }
 
@@ -199,11 +217,13 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_scroll_x(&mut self, length: i32) {
-        mouse_event(MOUSEEVENTF_HWHEEL, length as _, 0, 0);
+        let extra_info = self.get_extra_info();
+        mouse_event(MOUSEEVENTF_HWHEEL, length as _, 0, 0, extra_info);
     }
 
     fn mouse_scroll_y(&mut self, length: i32) {
-        mouse_event(MOUSEEVENTF_WHEEL, length as _, 0, 0);
+        let extra_info = self.get_extra_info();
+        mouse_event(MOUSEEVENTF_WHEEL, length as _, 0, 0, extra_info);
     }
 }
 
@@ -242,11 +262,13 @@ impl KeyboardControllable for Enigo {
 
     fn key_click(&mut self, key: Key) {
         let vk = self.key_to_keycode(key);
-        keybd_event(0, vk, 0);
-        keybd_event(KEYEVENTF_KEYUP, vk, 0);
+        let extra_info = self.get_extra_info();
+        keybd_event(0, vk, 0, extra_info);
+        keybd_event(KEYEVENTF_KEYUP, vk, 0, extra_info);
     }
 
     fn key_down(&mut self, key: Key) -> crate::ResultType {
+        let extra_info = self.get_extra_info();
         match &key {
             Key::Layout(c) => {
                 // to-do: dup code
@@ -263,7 +285,7 @@ impl KeyboardControllable for Enigo {
                         }
                     }
 
-                    let res = keybd_event(0, vk, 0);
+                    let res = keybd_event(0, vk, 0, extra_info);
                     let err = if res == 0 { get_error() } else { "".to_owned() };
 
                     for pos in 0..mod_len {
@@ -285,7 +307,7 @@ impl KeyboardControllable for Enigo {
                 if code == 0 || code == 65535 {
                     return Err("".into());
                 }
-                let res = keybd_event(0, code, 0);
+                let res = keybd_event(0, code, 0, extra_info);
                 if res == 0 {
                     let err = get_error();
                     if !err.is_empty() {
@@ -298,7 +320,8 @@ impl KeyboardControllable for Enigo {
     }
 
     fn key_up(&mut self, key: Key) {
-        keybd_event(KEYEVENTF_KEYUP, self.key_to_keycode(key), 0);
+        let extra_info = self.get_extra_info();
+        keybd_event(KEYEVENTF_KEYUP, self.key_to_keycode(key), 0, extra_info);
     }
 
     fn get_key_state(&mut self, key: Key) -> bool {
@@ -312,6 +335,92 @@ impl KeyboardControllable for Enigo {
 }
 
 impl Enigo {
+    /// Get the extra info value to use for input injection
+    /// Returns MouseMux ID if enabled and valid, otherwise ENIGO_INPUT_EXTRA_VALUE
+    fn get_extra_info(&self) -> ULONG_PTR {
+        self.mousemux_input_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE)
+    }
+
+    /// Enable MouseMux integration
+    /// Attempts to find the MouseMux window and register with it
+    /// Returns true if successfully registered, false otherwise
+    pub fn enable_mousemux(&mut self, rustdesk_version: u32) -> bool {
+        unsafe {
+            // Find the MouseMux query window
+            let window_class = std::ffi::CString::new(MOUSEMUX_WINDOW_CLASS).unwrap();
+            let hwnd = FindWindowA(window_class.as_ptr() as *const i8, std::ptr::null());
+
+            if hwnd.is_null() {
+                log::warn!("MouseMux: Window not found");
+                self.mousemux_input_id = None;
+                return false;
+            }
+
+            // Send registration message with timeout
+            let mut result: DWORD_PTR = 0;
+            let send_result = SendMessageTimeoutA(
+                hwnd,
+                MOUSEMUX_MSG_REGISTER,
+                rustdesk_version as WPARAM,
+                0,
+                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                MOUSEMUX_TIMEOUT_MS,
+                &mut result as *mut DWORD_PTR,
+            );
+
+            if send_result == 0 {
+                log::warn!("MouseMux: SendMessageTimeout failed");
+                self.mousemux_input_id = None;
+                return false;
+            }
+
+            // Check if result is in valid range
+            let result_ulong = result as ULONG_PTR;
+            if result_ulong > MOUSEMUX_ID_MIN && result_ulong < MOUSEMUX_ID_MAX {
+                log::info!("MouseMux: Registered with ID {}", result_ulong);
+                self.mousemux_input_id = Some(result_ulong);
+                true
+            } else {
+                log::warn!("MouseMux: Invalid ID returned: {}", result_ulong);
+                self.mousemux_input_id = None;
+                false
+            }
+        }
+    }
+
+    /// Disable MouseMux integration
+    /// Sends unregistration message and clears the stored ID
+    pub fn disable_mousemux(&mut self) {
+        if let Some(input_id) = self.mousemux_input_id {
+            unsafe {
+                // Find the MouseMux query window
+                let window_class = std::ffi::CString::new(MOUSEMUX_WINDOW_CLASS).unwrap();
+                let hwnd = FindWindowA(window_class.as_ptr() as *const i8, std::ptr::null());
+
+                if !hwnd.is_null() {
+                    // Send unregistration message
+                    let mut result: DWORD_PTR = 0;
+                    SendMessageTimeoutA(
+                        hwnd,
+                        MOUSEMUX_MSG_UNREGISTER,
+                        input_id as WPARAM,
+                        0,
+                        SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                        MOUSEMUX_TIMEOUT_MS,
+                        &mut result as *mut DWORD_PTR,
+                    );
+                    log::info!("MouseMux: Unregistered ID {}", input_id);
+                }
+            }
+        }
+        self.mousemux_input_id = None;
+    }
+
+    /// Check if MouseMux is currently enabled
+    pub fn is_mousemux_enabled(&self) -> bool {
+        self.mousemux_input_id.is_some()
+    }
+
     /// Gets the (width, height) of the main display in screen coordinates
     /// (pixels).
     ///
@@ -351,11 +460,13 @@ impl Enigo {
     }
 
     fn unicode_key_down(&self, unicode_char: u16) {
-        keybd_event(KEYEVENTF_UNICODE, 0, unicode_char);
+        let extra_info = self.get_extra_info();
+        keybd_event(KEYEVENTF_UNICODE, 0, unicode_char, extra_info);
     }
 
     fn unicode_key_up(&self, unicode_char: u16) {
-        keybd_event(KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, unicode_char);
+        let extra_info = self.get_extra_info();
+        keybd_event(KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, unicode_char, extra_info);
     }
 
     fn key_to_keycode(&self, key: Key) -> u16 {

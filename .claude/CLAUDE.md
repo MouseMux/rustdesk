@@ -1,0 +1,474 @@
+# RustDesk Build Process - Complete History
+
+## ✅ Build Success Summary
+
+**Status:** Successfully built RustDesk 1.4.2 with Sciter UI
+
+**Final Outputs:**
+- ✅ Executable: `target/release/rustdesk.exe` (27MB)
+- ✅ Installer: `rustdesk-1.4.2-x86_64-sciter.exe` (11MB)
+
+**Build Time:** ~15 minutes total
+
+**Key Configuration:**
+- Rust 1.75.0 (via rustup override)
+- Sciter UI (not Flutter - Flutter is broken)
+- Git branch: nightly
+- VCPKG_ROOT: /o/rustdesk-build/vcpkg
+
+**Quick Rebuild:**
+```bash
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+cd /o/rustdesk-build/rustdesk
+cargo build --release
+```
+
+---
+
+## MouseMux Integration Feature Specification
+
+### Overview
+Enable RustDesk host (Windows) to support multiple simultaneous client connections via MouseMux integration.
+
+### Technical Requirements
+
+#### 1. MouseMux Detection
+- **Window to find:** `"mousemux.main.window.query"`
+- **Method:** Win32 `FindWindow()` or `FindWindowA()`
+- **Frequency:** Check on connection establishment and when user toggles MouseMux checkbox
+
+#### 2. Version Handshake Protocol
+**On Connection / MouseMux Enable:**
+- Find window handle (HWND) of `"mousemux.main.window.query"`
+- If found:
+  - Call `SendMessage()` with:
+    - HWND: Found window handle
+    - Message: `WM_APP + 20` (typically 0x8000 + 20 = 0x8014)
+    - wParam: RustDesk version as integer
+    - lParam: 0 (unused)
+    - Timeout: 5 seconds (use `SendMessageTimeout`)
+  - Check return value:
+    - If return value > 6000 AND < 6200: Store as `mousemux_input_id`
+    - Else: Fall back to `ENIGO_INPUT_EXTRA_VALUE`
+- If not found: Use `ENIGO_INPUT_EXTRA_VALUE`
+
+#### 3. Input Injection Modification
+**Current behavior:**
+- Uses `ENIGO_INPUT_EXTRA_VALUE` in `SendInput()` calls
+
+**New behavior:**
+- If MouseMux enabled AND `mousemux_input_id` is valid (6000-6200):
+  - Use `mousemux_input_id` instead of `ENIGO_INPUT_EXTRA_VALUE`
+- Else:
+  - Use `ENIGO_INPUT_EXTRA_VALUE`
+
+**Applies to:**
+- Keyboard injection (via SendInput with INPUT_KEYBOARD)
+- Mouse injection (via SendInput with INPUT_MOUSE)
+
+#### 4. Disconnection Protocol
+**On Client Disconnect:**
+- If MouseMux was active for this connection:
+  - Send message to `"mousemux.main.window.query"`:
+    - Message: `WM_APP + 24` (0x8018)
+    - wParam: `mousemux_input_id` (the assigned ID)
+    - lParam: 0
+    - Use `SendMessageTimeout` with 5 second timeout
+
+#### 5. UI Integration
+**Add Checkbox:**
+- Label: "MouseMux enabled"
+- Location: In connection settings/options (accessible during active connection)
+- Behavior:
+  - Can be toggled on/off multiple times during connection
+  - On toggle: Re-run MouseMux detection and handshake
+  - State change takes effect immediately on next input event
+
+### Implementation Areas
+
+#### Files to Modify (Expected)
+1. **Input injection (Windows):**
+   - `libs/enigo/src/win/win_impl.rs` - SendInput calls
+   - Look for `ENIGO_INPUT_EXTRA_VALUE` usage
+
+2. **Connection management:**
+   - `src/server/connection.rs` - Handle connection lifecycle
+   - Need to track MouseMux state per connection
+
+3. **UI (Sciter):**
+   - `src/ui/` - Add MouseMux checkbox
+   - Sciter TIS files for UI elements
+
+4. **Windows-specific code:**
+   - `src/platform/windows.rs` or similar - Win32 API calls
+
+### State Management
+```rust
+struct MouseMuxState {
+    enabled: bool,              // User checkbox state
+    input_id: Option<u32>,      // Assigned ID (6000-6200) or None
+    window_hwnd: Option<HWND>,  // Cached window handle
+}
+```
+
+### Constants to Define
+```rust
+const MOUSEMUX_WINDOW_CLASS: &str = "mousemux.main.window.query";
+const MOUSEMUX_MSG_REGISTER: u32 = WM_APP + 20;    // 0x8014
+const MOUSEMUX_MSG_UNREGISTER: u32 = WM_APP + 24;  // 0x8018
+const MOUSEMUX_ID_MIN: u32 = 6000;
+const MOUSEMUX_ID_MAX: u32 = 6200;
+const MOUSEMUX_TIMEOUT_MS: u32 = 5000;
+```
+
+### Error Handling
+- If `SendMessageTimeout` fails: Fall back to `ENIGO_INPUT_EXTRA_VALUE`
+- If window not found: Fall back to `ENIGO_INPUT_EXTRA_VALUE`
+- If return value out of range: Fall back to `ENIGO_INPUT_EXTRA_VALUE`
+- Log warnings for troubleshooting (don't fail connection)
+
+### Testing Scenarios
+1. MouseMux not running → Use `ENIGO_INPUT_EXTRA_VALUE`
+2. MouseMux running, checkbox enabled → Use assigned ID
+3. MouseMux running, checkbox disabled → Use `ENIGO_INPUT_EXTRA_VALUE`
+4. Toggle checkbox during connection → Behavior changes immediately
+5. Client disconnects → Unregister message sent to MouseMux
+
+---
+
+## Initial Environment
+- **Location:** C:\RustDesk-build\rustdesk
+- **RAM:** 2GB (insufficient)
+- **Disk:** C: drive 60GB (100% full, only 50MB free)
+- **Rust Version:** 1.90.0 (too new)
+- **Git Branch:** master (latest, unstable)
+
+## Build Issues and Solutions
+
+### Issue 1: Insufficient Memory (2GB RAM)
+**Problem:**
+- Build failed with `memory allocation of 2097120 bytes failed`
+- Error: `STATUS_STACK_BUFFER_OVERRUN` during `windows` crate compilation
+- Cargo.toml release profile uses aggressive optimizations:
+  - `lto = true` (Link-Time Optimization - very memory intensive)
+  - `codegen-units = 1` (single codegen unit)
+
+**Solution:**
+- User upgraded system RAM from 2GB to 8GB
+- System now has adequate memory for compilation
+
+### Issue 2: Disk Space Exhausted
+**Problem:**
+- C: drive 100% full (60GB/60GB used, only 50MB free)
+- Error: `"There is not enough space on the disk. (os error 112)"`
+- Rust compilation needs 10-15GB free space for build artifacts
+
+**Solution:**
+- Copied entire project from `C:\RustDesk-build` to `O:\rustdesk-build`
+- O: drive has 37GB available space (sufficient)
+
+### Issue 3: VCPKG_ROOT Path Incorrect
+**Problem:**
+- After moving to O: drive, build failed with: `'opus/opus_multistream.h' file not found`
+- VCPKG_ROOT still pointed to old location: `c:\RustDesk-build\vcpkg`
+- magnum-opus build script cached the old path
+
+**Solution:**
+```bash
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+cd /o/rustdesk-build/rustdesk
+cargo clean  # Clean cached build artifacts
+```
+
+**Important:** VCPKG_ROOT must be set in each new shell session, or add to ~/.bashrc for persistence
+
+### Issue 4: Rust Version Incompatibility
+**Problem:**
+- RustDesk requires Rust 1.75.0 (specified in Cargo.toml line 9: `rust-version = "1.75"`)
+- System had Rust 1.90.0 installed
+- Newer Rust versions have breaking changes incompatible with RustDesk code
+- Compilation errors: trait bound `EventToUI: IntoIntoDart<_>` not satisfied in src/flutter.rs:1412
+
+**Solution:**
+```bash
+rustup install 1.75.0
+cd /o/rustdesk-build/rustdesk
+rustup override set 1.75.0  # Sets Rust 1.75.0 permanently for this directory
+```
+
+**Verification:**
+```bash
+cd /o/rustdesk-build/rustdesk
+rustc --version  # Should show: rustc 1.75.0 (82e1608df 2023-12-21)
+```
+
+### Issue 5: Unstable Git Branch (master)
+**Problem:**
+- Initially on `master` branch (latest commit: d11011896)
+- Even with correct Rust version (1.75.0), compilation failed
+- Error: `the trait 'IntoIntoDart<_>' is not implemented for 'EventToUI'` in src/flutter.rs
+- This is a code bug in the Flutter bridge implementation
+
+**Attempted Solution 1 - Tag 1.4.2:**
+```bash
+git checkout 1.4.2  # Tag matching version in Cargo.toml
+```
+- Result: Same compilation error - tag also has broken Flutter bridge
+
+**Attempted Solution 2 - Missing generated_bridge.dart:**
+- Checked for `flutter/lib/generated_bridge.dart` - file doesn't exist
+- File is not tracked in git (generated file)
+- However, this turned out not to be the issue - RustDesk may have changed architecture
+
+**Final Solution - Nightly Branch:**
+```bash
+cd /o/rustdesk-build/rustdesk
+git checkout nightly  # Stable nightly build with latest fixes
+# HEAD now at db4296533
+```
+
+**Reasoning:**
+- Nightly branch has latest bug fixes
+- More stable than master for active development
+- Should have Flutter bridge fixes
+
+## Current Build Configuration
+
+### Environment Variables (Required for each build session)
+```bash
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+```
+
+### Project Location
+```
+O:\rustdesk-build\
+├── rustdesk/          # Main project (git repo on 'nightly' branch)
+│   └── sciter.dll     # Sciter UI library (8.0MB, downloaded)
+└── vcpkg/             # C++ dependencies
+```
+
+### System Requirements
+- **RAM:** 8GB minimum (we have 8GB)
+- **Disk:** 15GB+ free space (we have 37GB on O:)
+- **Rust:** 1.75.0 (set via rustup override)
+- **Git Branch:** nightly
+
+### Build Command - SCITER VERSION (Working)
+```bash
+cd /o/rustdesk-build/rustdesk
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+cargo build --release
+```
+
+The executable will be at: `target/release/rustdesk.exe`
+
+### Build Command - FLUTTER VERSION (Currently Broken)
+```bash
+cd /o/rustdesk-build/rustdesk
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+python build.py --flutter
+```
+
+**Note:** Flutter version currently fails due to `EventToUI: IntoIntoDart<_>` trait implementation issue in src/flutter.rs:1412. This affects all branches (master, 1.4.2, nightly).
+
+### Clean Build (if needed)
+```bash
+cd /o/rustdesk-build/rustdesk
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+cargo clean
+cargo build --release  # For Sciter
+```
+
+### Issue 6: Flutter Version Unbuildable (All Branches)
+**Problem:**
+- Flutter version fails to compile on all branches (master, 1.4.2, nightly)
+- Error in `src/flutter.rs:1412`: `the trait 'IntoIntoDart<_>' is not implemented for 'EventToUI'`
+- Code tries to call: `stream.add(EventToUI::Event("close".to_owned()));`
+- The `EventToUI` enum doesn't implement the required `IntoIntoDart` trait from `flutter_rust_bridge-1.80.1`
+- This is a fundamental code bug, not a configuration issue
+
+**Attempted Solutions:**
+- ✗ Tried master branch - same error
+- ✗ Tried tag 1.4.2 - same error
+- ✗ Tried nightly branch - same error
+- ✗ All use flutter_rust_bridge 1.80.1 which has this incompatibility
+
+**Final Solution - Switch to Sciter:**
+```bash
+cd /o/rustdesk-build/rustdesk
+# Download Sciter DLL
+curl -L -o sciter.dll https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.win/x64/sciter.dll
+# Build without flutter feature
+cargo build --release
+```
+
+**Result:**
+- Sciter version builds successfully (though deprecated by RustDesk)
+- Executable output: `target/release/rustdesk.exe`
+- Sciter is the legacy UI, but functional
+
+## Build Timeline
+
+1. **First attempt** (C: drive, 2GB RAM, Rust 1.90): Memory allocation failure
+2. **After RAM upgrade** (C: drive, 8GB RAM, Rust 1.90): Disk space error
+3. **After move to O: drive** (8GB RAM, Rust 1.90, wrong VCPKG_ROOT): opus header not found
+4. **After VCPKG_ROOT fix** (8GB RAM, Rust 1.90, master branch): EventToUI trait error
+5. **After Rust downgrade to 1.75** (8GB RAM, master branch): Same EventToUI trait error
+6. **After git checkout 1.4.2** (8GB RAM, Rust 1.75): Same EventToUI trait error
+7. **After git checkout nightly** (8GB RAM, Rust 1.75): Same EventToUI trait error (Flutter broken)
+8. **Switch to Sciter** - Downloaded sciter.dll, built with `cargo build --release`
+9. **Sciter build SUCCESS** - Compiled in 13m 25s, produced 27MB executable
+10. **Installer created** - Built portable installer (11MB) using generate.py script
+
+## Key Learnings
+
+1. **RustDesk has strict Rust version requirements** - Always use exact version specified in Cargo.toml
+2. **VCPKG_ROOT must be set correctly** - Especially important after moving project directories
+3. **cargo clean is essential** - After changing paths or Rust versions to clear cached builds
+4. **master branch may be unstable** - Use nightly or release tags for building
+5. **Build requires significant resources** - 8GB RAM minimum, 15GB disk space minimum
+6. **Build time is long** - 30-45 minutes for clean build on 2-core system
+7. **Flutter version is currently broken** - Use Sciter (legacy) version instead with `cargo build --release`
+8. **Sciter DLL required for Windows** - Must download sciter.dll and place in project root
+
+## Troubleshooting Quick Reference
+
+### If build fails with "file not found" errors:
+```bash
+echo $VCPKG_ROOT  # Verify correct path
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+cargo clean
+```
+
+### If build fails with trait/compilation errors:
+```bash
+cd /o/rustdesk-build/rustdesk
+rustc --version  # Should be 1.75.0
+rustup override set 1.75.0
+git checkout nightly  # Try different branch
+cargo clean
+```
+
+### If build runs out of memory:
+- Check available RAM: `cat /proc/meminfo | grep MemTotal`
+- Close other applications
+- Consider building on a system with more RAM
+
+### If build runs out of disk space:
+- Check space: `df -h /o`
+- Clean old builds: `cargo clean`
+- Move to drive with more space
+
+## Successful Build Process Summary
+
+### Final Configuration That Worked
+- **Location:** O:\rustdesk-build\rustdesk
+- **RAM:** 8GB
+- **Disk Space:** 37GB available on O: drive
+- **Rust Version:** 1.75.0 (set via `rustup override set 1.75.0`)
+- **Git Branch:** nightly
+- **UI Framework:** Sciter (not Flutter)
+- **VCPKG_ROOT:** /o/rustdesk-build/vcpkg
+
+### Complete Build Steps (From Clean State)
+
+#### 1. Environment Setup
+```bash
+# Set Rust version (permanent for this directory)
+cd /o/rustdesk-build/rustdesk
+rustup install 1.75.0
+rustup override set 1.75.0
+
+# Verify
+rustc --version  # Should show 1.75.0
+
+# Set VCPKG_ROOT (needed for each session)
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+```
+
+#### 2. Download Sciter DLL
+```bash
+cd /o/rustdesk-build/rustdesk
+curl -L -o sciter.dll https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.win/x64/sciter.dll
+```
+- Downloads 8.0MB sciter.dll to project root
+- Required for Sciter UI to work
+
+#### 3. Build RustDesk Executable
+```bash
+cd /o/rustdesk-build/rustdesk
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg
+cargo build --release
+```
+- **Build time:** 13 minutes 25 seconds
+- **Output:** target/release/rustdesk.exe (27MB)
+- **Warnings:** 29 warnings (non-critical, mostly unused code)
+
+#### 4. Create Portable Installer
+```bash
+# Prepare resources directory
+mkdir -p resources
+cp target/release/rustdesk.exe resources/RustDesk.exe
+cp sciter.dll resources/
+
+# Install Python dependencies
+cd libs/portable
+pip3 install -r requirements.txt  # Installs brotli
+
+# Generate installer
+python generate.py -f ../../resources -o . -e ../../resources/RustDesk.exe
+```
+- **Compression level:** 11 (highest)
+- **Build time:** 51 seconds
+- **Packages:** RustDesk.exe + sciter.dll into single installer
+
+#### 5. Copy Final Installer
+```bash
+cd /o/rustdesk-build/rustdesk
+cp target/release/rustdesk-portable-packer.exe rustdesk-1.4.2-x86_64-sciter.exe
+```
+
+### Build Outputs
+1. **Executable:** `target/release/rustdesk.exe` (27MB)
+   - Requires sciter.dll in same directory to run
+
+2. **Portable Installer:** `rustdesk-1.4.2-x86_64-sciter.exe` (11MB)
+   - Self-extracting installer
+   - Contains both rustdesk.exe and sciter.dll compressed
+   - Ready for distribution
+
+### Critical Success Factors
+
+1. **Correct Rust Version**
+   - Must be 1.75.0 (newer versions fail)
+   - Use `rustup override` to set permanently for directory
+
+2. **VCPKG_ROOT Must Be Set**
+   - Points to vcpkg installation
+   - Must be set in every new shell session
+   - Add to ~/.bashrc for permanence
+
+3. **Sufficient Resources**
+   - 8GB RAM minimum
+   - 15GB+ free disk space
+   - Clean build after moving directories or changing Rust versions
+
+4. **Use Sciter, Not Flutter**
+   - Flutter version has broken trait implementations
+   - Sciter is deprecated but functional
+   - No --flutter flag to build.py or cargo
+
+5. **Nightly Branch**
+   - More stable than master for building
+   - Has latest dependency fixes
+   - Tag 1.4.2 also has Flutter issues
+
+### One-Line Rebuild Command
+```bash
+export VCPKG_ROOT=/o/rustdesk-build/vcpkg && cd /o/rustdesk-build/rustdesk && cargo clean && cargo build --release
+```
+
+### Time Requirements
+- Clean build: ~13-15 minutes
+- Installer generation: ~1 minute
+- Total: ~15-20 minutes for complete build from scratch
