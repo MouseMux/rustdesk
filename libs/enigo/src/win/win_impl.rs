@@ -338,26 +338,35 @@ impl Enigo {
     /// Get the extra info value to use for input injection
     /// Returns MouseMux ID if enabled and valid, otherwise ENIGO_INPUT_EXTRA_VALUE
     fn get_extra_info(&self) -> ULONG_PTR {
-        self.mousemux_input_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE)
+        let extra_info = self.mousemux_input_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE);
+        if self.mousemux_input_id.is_some() {
+            log::debug!("MouseMux: Using ID {} for input injection", extra_info);
+        }
+        extra_info
     }
 
     /// Enable MouseMux integration
     /// Attempts to find the MouseMux window and register with it
     /// Returns true if successfully registered, false otherwise
     pub fn enable_mousemux(&mut self, rustdesk_version: u32) -> bool {
+        log::info!("MouseMux: Attempting to enable with RustDesk version {}", rustdesk_version);
         unsafe {
             // Find the MouseMux query window
             let window_class = std::ffi::CString::new(MOUSEMUX_WINDOW_CLASS).unwrap();
+            log::info!("MouseMux: Looking for window class '{}'", MOUSEMUX_WINDOW_CLASS);
             let hwnd = FindWindowA(window_class.as_ptr() as *const i8, std::ptr::null());
 
             if hwnd.is_null() {
-                log::warn!("MouseMux: Window not found");
+                log::warn!("MouseMux: Window '{}' not found - MouseMux may not be running", MOUSEMUX_WINDOW_CLASS);
                 self.mousemux_input_id = None;
                 return false;
             }
 
+            log::info!("MouseMux: Found window HWND: {:?}", hwnd);
+
             // Send registration message with timeout
             let mut result: DWORD_PTR = 0;
+            log::info!("MouseMux: Sending registration message (WM_APP+20 = 0x{:04X}) with version {}", MOUSEMUX_MSG_REGISTER, rustdesk_version);
             let send_result = SendMessageTimeoutA(
                 hwnd,
                 MOUSEMUX_MSG_REGISTER,
@@ -369,19 +378,22 @@ impl Enigo {
             );
 
             if send_result == 0 {
-                log::warn!("MouseMux: SendMessageTimeout failed");
+                let error_code = GetLastError();
+                log::error!("MouseMux: SendMessageTimeout failed with error code: {}", error_code);
                 self.mousemux_input_id = None;
                 return false;
             }
 
+            log::info!("MouseMux: SendMessage succeeded, result={}", result);
+
             // Check if result is in valid range
             let result_ulong = result as ULONG_PTR;
             if result_ulong > MOUSEMUX_ID_MIN && result_ulong < MOUSEMUX_ID_MAX {
-                log::info!("MouseMux: Registered with ID {}", result_ulong);
+                log::info!("MouseMux: Successfully registered with ID {} (valid range: {}-{})", result_ulong, MOUSEMUX_ID_MIN, MOUSEMUX_ID_MAX);
                 self.mousemux_input_id = Some(result_ulong);
                 true
             } else {
-                log::warn!("MouseMux: Invalid ID returned: {}", result_ulong);
+                log::warn!("MouseMux: Invalid ID returned: {} (expected range: {}-{})", result_ulong, MOUSEMUX_ID_MIN, MOUSEMUX_ID_MAX);
                 self.mousemux_input_id = None;
                 false
             }
