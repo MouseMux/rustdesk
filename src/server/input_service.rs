@@ -483,7 +483,7 @@ pub fn try_enable_mousemux_on_server_start() {
         // Give MouseMux a moment to start if it's launching
         thread::sleep(Duration::from_millis(500));
 
-        let version = hbb_common::get_version_number(&crate::VERSION);
+        let version = hbb_common::get_version_number(&crate::VERSION) as u32;
         if enable_mousemux(version) {
             log::info!("MouseMux: Auto-enabled successfully with version {}", version);
         } else {
@@ -497,7 +497,7 @@ pub fn try_enable_mousemux_on_server_start() {
 #[cfg(windows)]
 pub fn trigger_mousemux_registration() -> bool {
     log::info!("MouseMux: Manual registration trigger called");
-    let version = hbb_common::get_version_number(&crate::VERSION);
+    let version = hbb_common::get_version_number(&crate::VERSION) as u32;
     let result = enable_mousemux(version);
     if result {
         log::info!("MouseMux: Manual registration succeeded with version {}", version);
