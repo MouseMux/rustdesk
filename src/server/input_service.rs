@@ -471,6 +471,27 @@ pub fn is_mousemux_enabled() -> bool {
     }
 }
 
+#[cfg(windows)]
+pub fn try_enable_mousemux_on_server_start() {
+    use std::thread;
+    use std::time::Duration;
+
+    // Try to enable MouseMux in a separate thread to not block server startup
+    thread::spawn(|| {
+        log::info!("MouseMux: Auto-enable attempt on server start");
+
+        // Give MouseMux a moment to start if it's launching
+        thread::sleep(Duration::from_millis(500));
+
+        let version = hbb_common::get_version_number(&crate::VERSION);
+        if enable_mousemux(version) {
+            log::info!("MouseMux: Auto-enabled successfully with version {}", version);
+        } else {
+            log::info!("MouseMux: Auto-enable failed (MouseMux may not be running)");
+        }
+    });
+}
+
 const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
 // Actual diff of (x,y) is (1,1) here. But 5 may be tolerant.
 const MOUSE_ACTIVE_DISTANCE: i32 = 5;
