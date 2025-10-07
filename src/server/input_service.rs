@@ -492,6 +492,21 @@ pub fn try_enable_mousemux_on_server_start() {
     });
 }
 
+/// Manual trigger function for testing MouseMux registration
+/// This can be called on-demand to force a MouseMux registration attempt
+#[cfg(windows)]
+pub fn trigger_mousemux_registration() -> bool {
+    log::info!("MouseMux: Manual registration trigger called");
+    let version = hbb_common::get_version_number(&crate::VERSION);
+    let result = enable_mousemux(version);
+    if result {
+        log::info!("MouseMux: Manual registration succeeded with version {}", version);
+    } else {
+        log::warn!("MouseMux: Manual registration failed");
+    }
+    result
+}
+
 const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
 // Actual diff of (x,y) is (1,1) here. But 5 may be tolerant.
 const MOUSE_ACTIVE_DISTANCE: i32 = 5;
