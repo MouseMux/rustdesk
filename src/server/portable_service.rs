@@ -235,6 +235,17 @@ pub mod server {
     }
 
     pub fn run_portable_service() {
+        // Enable MouseMux for the portable service process
+        #[cfg(windows)]
+        {
+            let version = hbb_common::get_version_number(&crate::VERSION) as u32;
+            if crate::input_service::enable_mousemux(version) {
+                log::info!("Portable service process: MouseMux enabled successfully");
+            } else {
+                log::info!("Portable service process: MouseMux not available");
+            }
+        }
+
         let shmem = match SharedMemory::open_existing(SHMEM_NAME) {
             Ok(shmem) => Arc::new(shmem),
             Err(e) => {
@@ -538,6 +549,7 @@ pub mod client {
 
     pub(crate) fn start_portable_service(para: StartPara) -> ResultType<()> {
         log::info!("start portable service");
+
         if RUNNING.lock().unwrap().clone() {
             bail!("already running");
         }
