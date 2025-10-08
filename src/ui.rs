@@ -501,6 +501,14 @@ impl UI {
         get_app_name()
     }
 
+    fn get_mousemux_enabled(&self) -> String {
+        get_mousemux_enabled()
+    }
+
+    fn set_mousemux_enabled(&self, enabled: String) {
+        set_mousemux_enabled(enabled)
+    }
+
     fn get_software_ext(&self) -> String {
         #[cfg(windows)]
         let p = "exe";
@@ -732,6 +740,8 @@ impl sciter::EventHandler for UI {
         fn show_run_without_install();
         fn run_without_install();
         fn get_app_name();
+        fn get_mousemux_enabled();
+        fn set_mousemux_enabled(String);
         fn get_software_store_path();
         fn get_software_ext();
         fn open_url(String);

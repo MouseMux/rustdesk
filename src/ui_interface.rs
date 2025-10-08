@@ -1527,3 +1527,38 @@ pub fn clear_trusted_devices() {
 pub fn max_encrypt_len() -> usize {
     hbb_common::config::ENCRYPT_MAX_LEN
 }
+
+// MouseMux functions
+#[cfg(windows)]
+pub fn get_mousemux_enabled() -> String {
+    if crate::server::input_service::is_mousemux_enabled() {
+        "Y".to_owned()
+    } else {
+        "".to_owned()
+    }
+}
+
+#[cfg(windows)]
+pub fn set_mousemux_enabled(enabled: String) {
+    let enabled = enabled == "Y";
+    if enabled {
+        let version = hbb_common::get_version_number(&crate::VERSION) as u32;
+        if crate::server::input_service::enable_mousemux(version) {
+            log::info!("MouseMux enabled from UI");
+        } else {
+            log::warn!("Failed to enable MouseMux from UI");
+        }
+    } else {
+        crate::server::input_service::disable_mousemux();
+        log::info!("MouseMux disabled from UI");
+    }
+}
+
+#[cfg(not(windows))]
+pub fn get_mousemux_enabled() -> String {
+    "".to_owned()
+}
+
+#[cfg(not(windows))]
+pub fn set_mousemux_enabled(_enabled: String) {
+}
