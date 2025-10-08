@@ -51,12 +51,27 @@ With MouseMux integration, each connected user can have their own independent mo
    - ✅ Modified all `mouse_event()` calls to use MouseMux ID when enabled
    - ✅ Modified all `keybd_event()` calls to use MouseMux ID when enabled
    - ✅ Win32 API integration for window detection and messaging
+   - ✅ Added comprehensive SendInput logging to track dwExtraInfo values
 
 2. **Input Service (src/server/input_service.rs)**
    - ✅ Added global `enable_mousemux(version)` function
    - ✅ Added global `disable_mousemux()` function
    - ✅ Added global `is_mousemux_enabled()` function
    - ✅ Functions control the shared ENIGO static instance
+   - ✅ Auto-enable on server startup (with 500ms delay)
+   - ✅ Manual trigger function for testing
+
+3. **Portable Service (src/server/portable_service.rs)** ⭐ **CRITICAL FIX**
+   - ✅ Fixed MouseMux registration in elevated portable service process
+   - ✅ Moved registration from `start_portable_service()` to `run_portable_service()`
+   - ✅ Portable service process now gets unique MouseMux ID
+   - ✅ All SendInput calls now use correct ID instead of default 100
+
+4. **UI Interface (src/ui_interface.rs & src/ui.rs)**
+   - ✅ Added `get_mousemux_enabled()` function
+   - ✅ Added `set_mousemux_enabled(enabled)` function
+   - ✅ Exposed functions to Sciter UI layer via function declarations
+   - ✅ Cross-platform support (Windows implementation, stubs for other platforms)
 
 ### 🔄 Programmatic Usage (Available Now)
 
@@ -86,14 +101,72 @@ if input_service::is_mousemux_enabled() {
 ### ⏳ Pending Components
 
 1. **UI Integration (Sciter)**
-   - ❌ Checkbox in remote desktop UI not yet implemented
-   - ❌ Message handler for UI toggle not yet implemented
-   - **Workaround:** Can be enabled programmatically or via config file
+   - ⚠️ Backend functions implemented (get/set_mousemux_enabled)
+   - ❌ Checkbox UI element in Sciter TIS files not yet added
+   - **Status:** Backend ready, just needs UI element added to settings
 
 2. **Connection Lifecycle Integration**
-   - ❌ Automatic enable on connection start (if configured)
-   - ❌ Automatic disable on connection end
-   - **Workaround:** Can be manually called in connection setup
+   - ⚠️ Auto-enable on server startup implemented
+   - ❌ Per-connection enable/disable not yet implemented
+   - ❌ Automatic disable on connection end not yet implemented
+   - **Status:** Global enable works, per-connection management needs work
+
+### 🐛 Critical Bug Fix: Portable Service Process Registration
+
+**Issue Discovered (October 8, 2025):**
+- MouseMux was receiving ID 100 (default `ENIGO_INPUT_EXTRA_VALUE`) instead of registered IDs
+- Only 2 SendInput calls were logged with correct MouseMux IDs during entire remote sessions
+- All subsequent mouse/keyboard input showed ID 100 in MouseMux
+
+**Root Cause Analysis:**
+RustDesk uses a **two-process architecture** on Windows for input injection:
+
+1. **Main Process** (`rustdesk.exe`):
+   - Runs with normal user privileges
+   - Handles UI, networking, video encoding
+   - Spawns the portable service process
+   - Receives input events from remote clients via network
+
+2. **Portable Service Process** (`rustdesk.exe --portable-service`):
+   - Separate elevated/SYSTEM process spawned by main process
+   - Handles actual `SendInput()` calls for mouse/keyboard injection
+   - Required for injecting input into elevated applications
+   - Communicates with main process via IPC (Inter-Process Communication)
+
+**The Bug:**
+- MouseMux registration was in `start_portable_service()` (client module, line 550)
+- This function runs in the **main process** which spawns the portable service
+- But the **portable service process** runs `run_portable_service()` (server module, line 237)
+- The portable service process was never calling `enable_mousemux()`
+- Its ENIGO instance was using default ID 100
+
+**Input Flow (Simplified):**
+```
+Remote Client → Network → Main Process → IPC → Portable Service → SendInput()
+                                                     ↑
+                                            This process wasn't registered!
+```
+
+**The Fix (Commit: 6da40d7ce):**
+- Moved `enable_mousemux()` call from `start_portable_service()` to `run_portable_service()`
+- Added logging: "Portable service process: MouseMux enabled successfully"
+- Removed duplicate registration from main process (line 542-551 deleted)
+- Added comprehensive SendInput logging to track dwExtraInfo values
+
+**Files Modified:**
+- `src/server/portable_service.rs`: Added registration at line 238-247
+- `libs/enigo/src/win/win_impl.rs`: Added SendInput logging at lines 50, 86
+
+**Result:**
+- Portable service process now registers with MouseMux when it starts (before IPC client connects)
+- Gets unique MouseMux ID (e.g., 6001)
+- All SendInput calls use correct ID instead of default 100
+- MouseMux can properly track and display multiple concurrent RustDesk connections
+
+**Testing:**
+- Log message: `Portable service process: MouseMux enabled successfully`
+- Log message: `MouseMux: SendInput(MOUSE) called with dwExtraInfo=6001` (repeated for each input)
+- MouseMux output: Shows 6001 instead of 100
 
 ### 📝 Implementation Notes for Future Work
 
