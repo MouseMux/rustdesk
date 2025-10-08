@@ -116,7 +116,15 @@ pub fn global_init() -> bool {
     true
 }
 
-pub fn global_clean() {}
+pub fn global_clean() {
+    #[cfg(windows)]
+    {
+        // Notify MouseMux we're shutting down
+        crate::platform::windows_mousemux::notify_shutdown();
+        // Clean up message window
+        crate::platform::windows_mousemux::shutdown_mousemux_window();
+    }
+}
 
 #[inline]
 pub fn set_server_running(b: bool) {
