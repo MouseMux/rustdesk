@@ -1670,6 +1670,13 @@ impl Connection {
 
     fn on_remote_authorized(&self) {
         self.update_codec_on_login();
+
+        // Request MouseMux IDs for this connection
+        #[cfg(windows)]
+        {
+            log::info!("#{} Client authorized, requesting MouseMux IDs", self.inner.id());
+            crate::platform::windows_mousemux::request_ids();
+        }
         #[cfg(any(target_os = "windows", target_os = "linux"))]
         if config::option2bool(
             "allow-remove-wallpaper",
@@ -3763,6 +3770,15 @@ impl Connection {
             return;
         }
         self.closed = true;
+
+        // Release MouseMux IDs for this connection
+        #[cfg(windows)]
+        {
+            if self.authorized {
+                log::info!("#{} Connection closing, releasing MouseMux IDs", self.inner.id());
+                crate::platform::windows_mousemux::release_ids();
+            }
+        }
         // If voice A,B -> C, and A,B has voice call
         // B disconnects, C will reset the voice call input.
         //
