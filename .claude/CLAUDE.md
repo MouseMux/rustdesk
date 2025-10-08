@@ -27,6 +27,56 @@ cargo build --release
 
 ## MouseMux Integration Implementation Status
 
+### 🔄 Protocol V2 Implementation (October 8, 2025)
+
+**Status:** Implementing new bidirectional asynchronous protocol
+
+The original implementation (v1) has been replaced with a more robust protocol design:
+
+#### Protocol V2 Key Changes:
+- **Asynchronous Communication**: Uses PostMessage instead of SendMessage (non-blocking)
+- **Bidirectional Messaging**: RustDesk creates window to receive messages from MouseMux
+- **Connection-Based IDs**: IDs assigned when client connects, not on startup
+- **Dual ID System**: Separate IDs for mouse and keyboard input
+- **HWND Verification**: RustDesk passes its window handle for identity verification
+
+#### New Message Protocol:
+
+| Message | Direction | When | wParam | lParam | Purpose |
+|---------|-----------|------|--------|--------|---------|
+| **WM_APP+10** | RustDesk → MouseMux | Startup | Version | RustDesk HWND | "RustDesk is running" |
+| **WM_APP+20** | RustDesk → MouseMux | Shutdown | 0 | 0 | "RustDesk is exiting" |
+| **WM_APP+30** | RustDesk → MouseMux | Client connects | 0 | 0 | "Please assign IDs" |
+| **WM_APP+40** | RustDesk → MouseMux | Client disconnects | Mouse ID | Keyboard ID | "Release these IDs" |
+| **WM_APP+100** | MouseMux → RustDesk | After WM_APP+30 | Mouse ID | Keyboard ID | "Here are your IDs" |
+
+#### Implementation Phases:
+
+**Phase 1: Core Infrastructure** ✅
+- Create Windows message window "rustdesk.mousemux.window.query"
+- Background thread with message loop
+- WndProc to handle incoming WM_APP+100 messages
+- Thread-safe state management
+
+**Phase 2: Protocol Implementation** 🔄
+- Startup: Create window, send WM_APP+10
+- Connection: Send WM_APP+30, wait for WM_APP+100
+- Disconnection: Send WM_APP+40
+- Shutdown: Send WM_APP+20
+
+**Phase 3: Input Injection Updates** ⏳
+- Separate mouse_id and keyboard_id in Enigo
+- Update mouse_event() to use mouse_id
+- Update keybd_event() to use keyboard_id
+- Portable service IPC updates
+
+**Phase 4: Testing & Cleanup** ⏳
+- Remove old SendMessage-based code
+- Remove unused UI toggle functions
+- Integration testing with MouseMux
+
+---
+
 ### About This Build
 
 **RustDesk (MouseMux compliant edition)** is a modified version of RustDesk that enables multiple people to connect to one host simultaneously and collaborate in real-time through MouseMux.
