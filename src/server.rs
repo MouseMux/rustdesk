@@ -563,7 +563,16 @@ pub async fn start_server(is_server: bool, no_server: bool) {
         });
         input_service::fix_key_down_timeout_loop();
         #[cfg(windows)]
-        input_service::try_enable_mousemux_on_server_start();
+        {
+            // Initialize MouseMux V2 protocol
+            if let Err(e) = crate::platform::windows_mousemux::init_mousemux_window() {
+                log::warn!("Failed to initialize MouseMux V2 window: {}", e);
+            } else {
+                // Send startup notification to MouseMux
+                let version = hbb_common::get_version_number(&crate::VERSION) as u32;
+                crate::platform::windows_mousemux::notify_startup(version);
+            }
+        }
         #[cfg(target_os = "linux")]
         if input_service::wayland_use_uinput() {
             allow_err!(input_service::setup_uinput(0, 1920, 0, 1080).await);
