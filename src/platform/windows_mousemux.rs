@@ -75,6 +75,9 @@ unsafe extern "system" fn window_proc(
                 state.keyboard_id = Some(keyboard_id);
             }
 
+            // Sync IDs to input_service's Enigo instance
+            crate::server::input_service::sync_mousemux_ids();
+
             0
         }
         _ => DefWindowProcA(hwnd, msg, wparam, lparam),
@@ -229,12 +232,22 @@ pub fn get_keyboard_id() -> Option<u32> {
     MOUSEMUX_STATE.lock().unwrap().keyboard_id
 }
 
+/// Get both mouse and keyboard IDs (convenience function for input_service)
+pub fn get_ids() -> (Option<u32>, Option<u32>) {
+    let state = MOUSEMUX_STATE.lock().unwrap();
+    (state.mouse_id, state.keyboard_id)
+}
+
 /// Clear assigned IDs (called on client disconnect)
 pub fn clear_ids() {
     let mut state = MOUSEMUX_STATE.lock().unwrap();
     state.mouse_id = None;
     state.keyboard_id = None;
     log::info!("MouseMux V2: Cleared assigned IDs");
+    drop(state); // Release lock before syncing
+
+    // Sync cleared IDs to input_service's Enigo instance
+    crate::server::input_service::sync_mousemux_ids();
 }
 
 /// Check if IDs are currently assigned

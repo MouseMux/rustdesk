@@ -235,16 +235,9 @@ pub mod server {
     }
 
     pub fn run_portable_service() {
-        // Enable MouseMux for the portable service process
-        #[cfg(windows)]
-        {
-            let version = hbb_common::get_version_number(&crate::VERSION) as u32;
-            if crate::input_service::enable_mousemux(version) {
-                log::info!("Portable service process: MouseMux enabled successfully");
-            } else {
-                log::info!("Portable service process: MouseMux not available");
-            }
-        }
+        // MouseMux V2: No initialization needed here
+        // The main process handles all MouseMux communication via the message window
+        // This elevated process just uses the IDs that are synced to the Enigo instance
 
         let shmem = match SharedMemory::open_existing(SHMEM_NAME) {
             Ok(shmem) => Arc::new(shmem),
