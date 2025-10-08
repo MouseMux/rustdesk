@@ -445,66 +445,13 @@ lazy_static::lazy_static! {
 }
 static EXITING: AtomicBool = AtomicBool::new(false);
 
-// MouseMux integration helper functions
+// MouseMux V2 integration helper functions
 #[cfg(windows)]
-pub fn enable_mousemux(rustdesk_version: u32) -> bool {
+pub fn sync_mousemux_ids() {
     if let Ok(mut enigo) = ENIGO.lock() {
-        enigo.enable_mousemux(rustdesk_version)
-    } else {
-        false
+        let (mouse_id, keyboard_id) = crate::platform::windows_mousemux::get_ids();
+        enigo.set_mousemux_ids(mouse_id, keyboard_id);
     }
-}
-
-#[cfg(windows)]
-pub fn disable_mousemux() {
-    if let Ok(mut enigo) = ENIGO.lock() {
-        enigo.disable_mousemux();
-    }
-}
-
-#[cfg(windows)]
-pub fn is_mousemux_enabled() -> bool {
-    if let Ok(enigo) = ENIGO.lock() {
-        enigo.is_mousemux_enabled()
-    } else {
-        false
-    }
-}
-
-#[cfg(windows)]
-pub fn try_enable_mousemux_on_server_start() {
-    use std::thread;
-    use std::time::Duration;
-
-    // Try to enable MouseMux in a separate thread to not block server startup
-    thread::spawn(|| {
-        log::info!("MouseMux: Auto-enable attempt on server start");
-
-        // Give MouseMux a moment to start if it's launching
-        thread::sleep(Duration::from_millis(500));
-
-        let version = hbb_common::get_version_number(&crate::VERSION) as u32;
-        if enable_mousemux(version) {
-            log::info!("MouseMux: Auto-enabled successfully with version {}", version);
-        } else {
-            log::info!("MouseMux: Auto-enable failed (MouseMux may not be running)");
-        }
-    });
-}
-
-/// Manual trigger function for testing MouseMux registration
-/// This can be called on-demand to force a MouseMux registration attempt
-#[cfg(windows)]
-pub fn trigger_mousemux_registration() -> bool {
-    log::info!("MouseMux: Manual registration trigger called");
-    let version = hbb_common::get_version_number(&crate::VERSION) as u32;
-    let result = enable_mousemux(version);
-    if result {
-        log::info!("MouseMux: Manual registration succeeded with version {}", version);
-    } else {
-        log::warn!("MouseMux: Manual registration failed");
-    }
-    result
 }
 
 const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);

@@ -24,14 +24,6 @@ static mut LAYOUT: HKL = std::ptr::null_mut();
 /// The dwExtraInfo value in keyboard and mouse structure that used in SendInput()
 pub const ENIGO_INPUT_EXTRA_VALUE: ULONG_PTR = 100;
 
-// MouseMux integration constants
-const MOUSEMUX_WINDOW_CLASS: &str = "mousemux.main.window.query";
-const MOUSEMUX_MSG_REGISTER: u32 = WM_APP + 20;    // 0x8014
-const MOUSEMUX_MSG_UNREGISTER: u32 = WM_APP + 24;  // 0x8018
-const MOUSEMUX_ID_MIN: ULONG_PTR = 6000;
-const MOUSEMUX_ID_MAX: ULONG_PTR = 6200;
-const MOUSEMUX_TIMEOUT_MS: u32 = 5000;
-
 fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32, extra_info: ULONG_PTR) -> DWORD {
     let mut u = INPUT_u::default();
     unsafe {
@@ -349,92 +341,12 @@ impl Enigo {
         self.mousemux_keyboard_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE)
     }
 
-    /// Enable MouseMux integration
-    /// Attempts to find the MouseMux window and register with it
-    /// Returns true if successfully registered, false otherwise
-    pub fn enable_mousemux(&mut self, rustdesk_version: u32) -> bool {
-        log::info!("MouseMux: Attempting to enable with RustDesk version {}", rustdesk_version);
-        unsafe {
-            // Find the MouseMux query window
-            let window_class = std::ffi::CString::new(MOUSEMUX_WINDOW_CLASS).unwrap();
-            log::info!("MouseMux: Looking for window class '{}'", MOUSEMUX_WINDOW_CLASS);
-            let hwnd = FindWindowA(window_class.as_ptr() as *const i8, std::ptr::null());
-
-            if hwnd.is_null() {
-                log::warn!("MouseMux: Window '{}' not found - MouseMux may not be running", MOUSEMUX_WINDOW_CLASS);
-                self.mousemux_input_id = None;
-                return false;
-            }
-
-            log::info!("MouseMux: Found window HWND: {:?}", hwnd);
-
-            // Send registration message with timeout
-            let mut result: DWORD_PTR = 0;
-            log::info!("MouseMux: Sending registration message (WM_APP+20 = 0x{:04X}) with version {}", MOUSEMUX_MSG_REGISTER, rustdesk_version);
-            let send_result = SendMessageTimeoutA(
-                hwnd,
-                MOUSEMUX_MSG_REGISTER,
-                rustdesk_version as WPARAM,
-                0,
-                SMTO_ABORTIFHUNG | SMTO_BLOCK,
-                MOUSEMUX_TIMEOUT_MS,
-                &mut result as *mut DWORD_PTR,
-            );
-
-            if send_result == 0 {
-                let error_code = GetLastError();
-                log::error!("MouseMux: SendMessageTimeout failed with error code: {}", error_code);
-                self.mousemux_input_id = None;
-                return false;
-            }
-
-            log::info!("MouseMux: SendMessage succeeded, result={}", result);
-
-            // Check if result is in valid range
-            let result_ulong = result as ULONG_PTR;
-            if result_ulong > MOUSEMUX_ID_MIN && result_ulong < MOUSEMUX_ID_MAX {
-                log::info!("MouseMux: Successfully registered with ID {} (valid range: {}-{})", result_ulong, MOUSEMUX_ID_MIN, MOUSEMUX_ID_MAX);
-                self.mousemux_input_id = Some(result_ulong);
-                true
-            } else {
-                log::warn!("MouseMux: Invalid ID returned: {} (expected range: {}-{})", result_ulong, MOUSEMUX_ID_MIN, MOUSEMUX_ID_MAX);
-                self.mousemux_input_id = None;
-                false
-            }
-        }
-    }
-
-    /// Disable MouseMux integration
-    /// Sends unregistration message and clears the stored ID
-    pub fn disable_mousemux(&mut self) {
-        if let Some(input_id) = self.mousemux_input_id {
-            unsafe {
-                // Find the MouseMux query window
-                let window_class = std::ffi::CString::new(MOUSEMUX_WINDOW_CLASS).unwrap();
-                let hwnd = FindWindowA(window_class.as_ptr() as *const i8, std::ptr::null());
-
-                if !hwnd.is_null() {
-                    // Send unregistration message
-                    let mut result: DWORD_PTR = 0;
-                    SendMessageTimeoutA(
-                        hwnd,
-                        MOUSEMUX_MSG_UNREGISTER,
-                        input_id as WPARAM,
-                        0,
-                        SMTO_ABORTIFHUNG | SMTO_BLOCK,
-                        MOUSEMUX_TIMEOUT_MS,
-                        &mut result as *mut DWORD_PTR,
-                    );
-                    log::info!("MouseMux: Unregistered ID {}", input_id);
-                }
-            }
-        }
-        self.mousemux_input_id = None;
-    }
-
-    /// Check if MouseMux is currently enabled
-    pub fn is_mousemux_enabled(&self) -> bool {
-        self.mousemux_input_id.is_some()
+    /// Set MouseMux IDs from V2 protocol
+    /// Called by input_service when IDs are received from MouseMux
+    pub fn set_mousemux_ids(&mut self, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+        self.mousemux_mouse_id = mouse_id.map(|id| id as ULONG_PTR);
+        self.mousemux_keyboard_id = keyboard_id.map(|id| id as ULONG_PTR);
+        log::info!("MouseMux V2: IDs updated - Mouse: {:?}, Keyboard: {:?}", mouse_id, keyboard_id);
     }
 
     /// Gets the (width, height) of the main display in screen coordinates
