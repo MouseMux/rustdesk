@@ -47,6 +47,7 @@ fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32, extra_info: ULONG_PTR) -
         type_: INPUT_MOUSE,
         u,
     };
+    log::info!("MouseMux: SendInput(MOUSE) called with dwExtraInfo={}", extra_info);
     unsafe { SendInput(1, &mut input as LPINPUT, size_of::<INPUT>() as c_int) }
 }
 
@@ -83,6 +84,7 @@ fn keybd_event(mut flags: u32, vk: u16, scan: u16, extra_info: ULONG_PTR) -> DWO
         type_: INPUT_KEYBOARD,
         u: union,
     }; 1];
+    log::info!("MouseMux: SendInput(KEYBOARD) called with dwExtraInfo={}", extra_info);
     unsafe {
         SendInput(
             inputs.len() as UINT,
@@ -339,9 +341,7 @@ impl Enigo {
     /// Returns MouseMux ID if enabled and valid, otherwise ENIGO_INPUT_EXTRA_VALUE
     fn get_extra_info(&self) -> ULONG_PTR {
         let extra_info = self.mousemux_input_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE);
-        if self.mousemux_input_id.is_some() {
-            log::debug!("MouseMux: Using ID {} for input injection", extra_info);
-        }
+        log::info!("MouseMux: get_extra_info() called - ID is {:?}, returning {}", self.mousemux_input_id, extra_info);
         extra_info
     }
 
