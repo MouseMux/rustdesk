@@ -32,9 +32,16 @@ const MOUSEMUX_WINDOW_CLASS: &str = "mousemux.main.window.query\0";
 const WINDOW_CLASS_NAME: &str = "rustdesk.mousemux.window.query\0";
 const WINDOW_TITLE: &str = "rustdesk.mousemux.window.query\0";
 
+/// Wrapper for HWND that is Send + Sync safe
+/// HWND is just a pointer to a window handle, safe to send between threads
+#[derive(Clone, Copy)]
+struct SendSyncHwnd(HWND);
+unsafe impl Send for SendSyncHwnd {}
+unsafe impl Sync for SendSyncHwnd {}
+
 /// Global state for MouseMux integration
 pub struct MouseMuxState {
-    pub hwnd: Option<HWND>,
+    pub hwnd: Option<SendSyncHwnd>,
     pub mouse_id: Option<u32>,
     pub keyboard_id: Option<u32>,
 }
@@ -166,11 +173,14 @@ pub fn init_mousemux_window() -> Result<(), String> {
     // Store HWND in global state
     {
         let mut state = MOUSEMUX_STATE.lock().unwrap();
-        state.hwnd = Some(hwnd);
+        state.hwnd = Some(SendSyncHwnd(hwnd));
     }
 
     // Start message loop in background thread
+    // Convert HWND to raw pointer value (usize) for thread safety
+    let hwnd_raw = hwnd as usize;
     let handle = thread::spawn(move || {
+        let hwnd = hwnd_raw as HWND;
         message_loop_thread(hwnd);
     });
 
@@ -191,7 +201,7 @@ pub fn shutdown_mousemux_window() {
         state.hwnd
     };
 
-    if let Some(hwnd) = hwnd {
+    if let Some(SendSyncHwnd(hwnd)) = hwnd {
         unsafe {
             // Post WM_QUIT to message loop
             PostQuitMessage(0);
@@ -219,7 +229,7 @@ pub fn shutdown_mousemux_window() {
 
 /// Get RustDesk's message window HWND
 pub fn get_rustdesk_hwnd() -> Option<HWND> {
-    MOUSEMUX_STATE.lock().unwrap().hwnd
+    MOUSEMUX_STATE.lock().unwrap().hwnd.map(|SendSyncHwnd(h)| h)
 }
 
 /// Get current mouse ID (if assigned)
