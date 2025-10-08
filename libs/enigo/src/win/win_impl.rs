@@ -15,7 +15,8 @@ extern "system" {
 /// The main struct for handling the event emitting
 #[derive(Default)]
 pub struct Enigo {
-    mousemux_input_id: Option<ULONG_PTR>,
+    mousemux_mouse_id: Option<ULONG_PTR>,
+    mousemux_keyboard_id: Option<ULONG_PTR>,
 }
 
 static mut LAYOUT: HKL = std::ptr::null_mut();
@@ -139,7 +140,7 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_move_to(&mut self, x: i32, y: i32) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_mouse_extra_info();
         mouse_event(
             MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
             0,
@@ -152,12 +153,12 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_move_relative(&mut self, x: i32, y: i32) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_mouse_extra_info();
         mouse_event(MOUSEEVENTF_MOVE, 0, x, y, extra_info);
     }
 
     fn mouse_down(&mut self, button: MouseButton) -> crate::ResultType {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_mouse_extra_info();
         let res = mouse_event(
             match button {
                 MouseButton::Left => MOUSEEVENTF_LEFTDOWN,
@@ -189,7 +190,7 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_up(&mut self, button: MouseButton) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_mouse_extra_info();
         mouse_event(
             match button {
                 MouseButton::Left => MOUSEEVENTF_LEFTUP,
@@ -219,12 +220,12 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_scroll_x(&mut self, length: i32) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_mouse_extra_info();
         mouse_event(MOUSEEVENTF_HWHEEL, length as _, 0, 0, extra_info);
     }
 
     fn mouse_scroll_y(&mut self, length: i32) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_mouse_extra_info();
         mouse_event(MOUSEEVENTF_WHEEL, length as _, 0, 0, extra_info);
     }
 }
@@ -264,13 +265,13 @@ impl KeyboardControllable for Enigo {
 
     fn key_click(&mut self, key: Key) {
         let vk = self.key_to_keycode(key);
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_keyboard_extra_info();
         keybd_event(0, vk, 0, extra_info);
         keybd_event(KEYEVENTF_KEYUP, vk, 0, extra_info);
     }
 
     fn key_down(&mut self, key: Key) -> crate::ResultType {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_keyboard_extra_info();
         match &key {
             Key::Layout(c) => {
                 // to-do: dup code
@@ -322,7 +323,7 @@ impl KeyboardControllable for Enigo {
     }
 
     fn key_up(&mut self, key: Key) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_keyboard_extra_info();
         keybd_event(KEYEVENTF_KEYUP, self.key_to_keycode(key), 0, extra_info);
     }
 
@@ -338,11 +339,14 @@ impl KeyboardControllable for Enigo {
 
 impl Enigo {
     /// Get the extra info value to use for input injection
-    /// Returns MouseMux ID if enabled and valid, otherwise ENIGO_INPUT_EXTRA_VALUE
-    fn get_extra_info(&self) -> ULONG_PTR {
-        let extra_info = self.mousemux_input_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE);
-        log::info!("MouseMux: get_extra_info() called - ID is {:?}, returning {}", self.mousemux_input_id, extra_info);
-        extra_info
+    /// Returns MouseMux mouse ID if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
+    fn get_mouse_extra_info(&self) -> ULONG_PTR {
+        self.mousemux_mouse_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE)
+    }
+
+    /// Returns MouseMux keyboard ID if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
+    fn get_keyboard_extra_info(&self) -> ULONG_PTR {
+        self.mousemux_keyboard_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE)
     }
 
     /// Enable MouseMux integration
@@ -472,12 +476,12 @@ impl Enigo {
     }
 
     fn unicode_key_down(&self, unicode_char: u16) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_keyboard_extra_info();
         keybd_event(KEYEVENTF_UNICODE, 0, unicode_char, extra_info);
     }
 
     fn unicode_key_up(&self, unicode_char: u16) {
-        let extra_info = self.get_extra_info();
+        let extra_info = self.get_keyboard_extra_info();
         keybd_event(KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, unicode_char, extra_info);
     }
 
