@@ -1012,6 +1012,10 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     let buttons = evt.mask >> 3;
     let evt_type = evt.mask & 0x7;
     let mut en = ENIGO.lock().unwrap();
+
+    // Set current connection ID for MouseMux V2.1
+    #[cfg(windows)]
+    en.set_current_conn_id(Some(conn));
     #[cfg(target_os = "macos")]
     en.set_ignore_flags(enigo_ignore_flags());
     #[cfg(not(target_os = "macos"))]
@@ -1204,19 +1208,19 @@ pub async fn lock_screen() {
 
 #[inline]
 #[cfg(target_os = "linux")]
-pub fn handle_key(evt: &KeyEvent) {
+pub fn handle_key(evt: &KeyEvent, _conn: i32) {
     handle_key_(evt);
 }
 
 #[inline]
 #[cfg(target_os = "windows")]
-pub fn handle_key(evt: &KeyEvent) {
-    crate::portable_service::client::handle_key(evt);
+pub fn handle_key(evt: &KeyEvent, conn: i32) {
+    crate::portable_service::client::handle_key(evt, conn);
 }
 
 #[inline]
 #[cfg(target_os = "macos")]
-pub fn handle_key(evt: &KeyEvent) {
+pub fn handle_key(evt: &KeyEvent, _conn: i32) {
     // having GUI, run main GUI thread, otherwise crash
     let evt = evt.clone();
     QUEUE.exec_async(move || handle_key_(&evt));

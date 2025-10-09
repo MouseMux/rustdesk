@@ -383,6 +383,7 @@ impl Enigo {
     /// Must be called before injecting input for a specific connection
     pub fn set_current_conn_id(&mut self, conn_id: Option<i32>) {
         self.current_conn_id = conn_id;
+        log::trace!("MouseMux V2.1: Current conn_id set to {:?}", conn_id);
     }
 
     /// Gets the (width, height) of the main display in screen coordinates
