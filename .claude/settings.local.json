@@ -10,7 +10,11 @@
       "Bash(/c/msys64/mingw64/bin/python:*)",
       "Bash(where python)",
       "Bash(/c/Users/Developer/AppData/Local/Programs/Python/Python313/python.exe build.py --flutter)",
-      "Read(//c/Users/Developer/AppData/Local/Programs/Python/Python313//**)"
+      "Read(//c/Users/Developer/AppData/Local/Programs/Python/Python313//**)",
+      "Read(//o/rustdesk-build/rustdesk/**)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git format-patch:*)"
     ],
     "deny": [],
     "ask": []

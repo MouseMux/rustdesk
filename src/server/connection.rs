@@ -130,7 +130,7 @@ enum MessageInput {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     Mouse((MouseEvent, i32)),
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    Key((KeyEvent, bool)),
+    Key((KeyEvent, bool, i32)),  // Added i32 for conn_id (MouseMux V2.1)
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     Pointer((PointerDeviceEvent, i32)),
     BlockOn,
@@ -941,16 +941,16 @@ impl Connection {
                     MessageInput::Mouse((msg, id)) => {
                         handle_mouse(&msg, id);
                     }
-                    MessageInput::Key((mut msg, press)) => {
+                    MessageInput::Key((mut msg, press, conn_id)) => {
                         // Set the press state to false, use `down` only in `handle_key()`.
                         msg.press = false;
                         if press {
                             msg.down = true;
                         }
-                        handle_key(&msg);
+                        handle_key(&msg, conn_id);
                         if press {
                             msg.down = false;
-                            handle_key(&msg);
+                            handle_key(&msg, conn_id);
                         }
                     }
                     MessageInput::Pointer((msg, id)) => {
@@ -1829,7 +1829,8 @@ impl Connection {
     fn input_key(&self, msg: KeyEvent, press: bool) {
         // to-do: if is the legacy mode, and the key is function key "LockScreen".
         // Switch to the primary display.
-        self.tx_input.send(MessageInput::Key((msg, press))).ok();
+        let conn_id = self.inner.id();  // Get conn_id for MouseMux V2.1
+        self.tx_input.send(MessageInput::Key((msg, press, conn_id))).ok();
     }
 
     fn validate_one_password(&self, password: String) -> bool {
