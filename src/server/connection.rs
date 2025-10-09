@@ -1671,11 +1671,32 @@ impl Connection {
     fn on_remote_authorized(&self) {
         self.update_codec_on_login();
 
-        // Request MouseMux IDs for this connection
+        // Request MouseMux IDs for this connection (V2.1 - per-connection)
         #[cfg(windows)]
         {
-            log::info!("#{} Client authorized, requesting MouseMux IDs", self.inner.id());
-            crate::platform::windows_mousemux::request_ids();
+            let conn_id = self.inner.id();
+
+            // Build peer_info string: "{name}@{id}"
+            let peer_info = if !self.lr.my_name.is_empty() || !self.lr.my_id.is_empty() {
+                format!("{}@{}", self.lr.my_name, self.lr.my_id)
+            } else {
+                // Fallback if both are empty
+                format!("conn_{}", conn_id)
+            };
+
+            // Truncate to 256 chars if needed
+            let peer_info = if peer_info.len() > 256 {
+                &peer_info[..256]
+            } else {
+                &peer_info
+            };
+
+            log::info!(
+                "#{} Client authorized, requesting MouseMux IDs with peer_info: '{}'",
+                conn_id,
+                peer_info
+            );
+            crate::platform::windows_mousemux::request_ids(conn_id, peer_info);
         }
         #[cfg(any(target_os = "windows", target_os = "linux"))]
         if config::option2bool(
@@ -3771,12 +3792,13 @@ impl Connection {
         }
         self.closed = true;
 
-        // Release MouseMux IDs for this connection
+        // Release MouseMux IDs for this connection (V2.1 - per-connection)
         #[cfg(windows)]
         {
             if self.authorized {
-                log::info!("#{} Connection closing, releasing MouseMux IDs", self.inner.id());
-                crate::platform::windows_mousemux::release_ids();
+                let conn_id = self.inner.id();
+                log::info!("#{} Connection closing, releasing MouseMux IDs", conn_id);
+                crate::platform::windows_mousemux::release_ids(conn_id);
             }
         }
         // If voice A,B -> C, and A,B has voice call
