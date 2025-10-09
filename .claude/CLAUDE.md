@@ -27,9 +27,438 @@ cargo build --release
 
 ## MouseMux Integration Implementation Status
 
+### 🔄 Protocol V2.1 - Per-Connection IDs (October 9, 2025)
+
+**Status:** 🔄 **IN PROGRESS - Implementing per-connection ID support**
+
+**Why V2.1?** V2 was implemented but not yet tested. Design review revealed that the global ID model (all connections share same IDs) prevents multiple users from collaborating simultaneously. V2.1 redesigns the protocol to assign unique IDs per connection, enabling true multi-user collaboration.
+
+---
+
+## 📋 MouseMux Protocol V2.1 - COMPLETE SPECIFICATION
+
+### Protocol Overview
+
+MouseMux V2.1 enables **multiple simultaneous users** to control a single Windows host, each with their own independent mouse cursor and keyboard. This is achieved by:
+1. Assigning unique IDs per connection (not globally shared)
+2. Tracking connections via `conn_id` (RustDesk's internal connection identifier)
+3. Transmitting peer identity to MouseMux for user-friendly display
+4. Using HashMap-based ID lookup during input injection
+
+---
+
+### Message Protocol Table
+
+| Message | Direction | When | wParam | lParam | Purpose |
+|---------|-----------|------|--------|--------|---------|
+| **WM_APP+10** | RustDesk → MouseMux | **RustDesk starts** | RustDesk version (142) | RustDesk HWND* | "I'm running at version X, send responses to this window" |
+| **WM_APP+20** | RustDesk → MouseMux | **RustDesk exits** | RustDesk version (142) | RustDesk HWND* | "I'm shutting down" (consistent params with +10) |
+| **WM_APP+30** | RustDesk → MouseMux | **Client connects** | conn_id | Protocol version (121) | "Connection #N started, using protocol v1.21" |
+| **WM_APP+32** | RustDesk → MouseMux | **Peer info char** | conn_id | char_code (or 0) | "Peer info character for connection #N" |
+| **WM_APP+34** | RustDesk → MouseMux | **Peer info done** | conn_id | 0 | "All info sent, please generate IDs now" |
+| **WM_APP+40** | RustDesk → MouseMux | **Client disconnects** | conn_id | 0 | "Connection #N ended, release its IDs" |
+| **WM_APP+100** | MouseMux → RustDesk | **Mouse ID assigned** | conn_id | mouse_id | "Mouse ID for connection #N is Y" |
+| **WM_APP+110** | MouseMux → RustDesk | **Keyboard ID assigned** | conn_id | keyboard_id | "Keyboard ID for connection #N is Z" |
+
+**\*HWND:** The window handle to **"rustdesk.mousemux.window.query"** - RustDesk's message-only window created at startup to receive callbacks from MouseMux.
+
+---
+
+### Protocol Constants
+
+```rust
+const WM_APP: u32 = 0x8000;
+const WM_MOUSEMUX_STARTUP: u32 = WM_APP + 10;        // 0x800A
+const WM_MOUSEMUX_SHUTDOWN: u32 = WM_APP + 20;       // 0x8014
+const WM_MOUSEMUX_CONN_START: u32 = WM_APP + 30;     // 0x801E
+const WM_MOUSEMUX_PEER_INFO_CHAR: u32 = WM_APP + 32; // 0x8020
+const WM_MOUSEMUX_PEER_INFO_DONE: u32 = WM_APP + 34; // 0x8022
+const WM_MOUSEMUX_CONN_END: u32 = WM_APP + 40;       // 0x8028
+const WM_MOUSEMUX_MOUSE_ID: u32 = WM_APP + 100;      // 0x8064
+const WM_MOUSEMUX_KEYBOARD_ID: u32 = WM_APP + 110;   // 0x806E
+
+const PROTOCOL_VERSION: u32 = 121;  // V2.1 = 121
+const RUSTDESK_VERSION: u32 = 142;  // 1.4.2 = 142
+```
+
+---
+
+### Complete Connection Flow
+
+#### 1. RustDesk Startup
+```
+1. RustDesk creates message window "rustdesk.mousemux.window.query"
+   → hwnd = 0x00AB1234 (example)
+
+2. RustDesk → MouseMux:
+   PostMessage(mousemux_hwnd, WM_APP+10, wParam=142, lParam=0x00AB1234)
+
+   MouseMux now knows:
+   - RustDesk version 1.4.2 is running
+   - Send responses to hwnd 0x00AB1234
+```
+
+#### 2. Client Connection (Example: "John@laptop123" connects as conn_id=5)
+
+**Step 1: Connection Start**
+```
+RustDesk → MouseMux:
+PostMessage(WM_APP+30, wParam=5, lParam=121)
+
+MouseMux creates entry: connections[5] = {peer_info: "", mouse_id: null, keyboard_id: null}
+```
+
+**Step 2: Peer Info Transmission (character-by-character)**
+```
+Peer string: "John@laptop123" (14 characters)
+
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='J')   // char 0
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='o')   // char 1
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='h')   // char 2
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='n')   // char 3
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='@')   // char 4
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='l')   // char 5
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='a')   // char 6
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='p')   // char 7
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='t')   // char 8
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='o')   // char 9
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='p')   // char 10
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='1')   // char 11
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='2')   // char 12
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam='3')   // char 13
+RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=5, lParam=0)     // null terminator
+
+MouseMux appends each char to connections[5].peer_info → "John@laptop123"
+```
+
+**Step 3: Trigger ID Generation**
+```
+RustDesk → MouseMux:
+PostMessage(WM_APP+34, wParam=5, lParam=0)
+
+MouseMux:
+- Assigns mouse_id = 6001
+- Assigns keyboard_id = 6002
+- Updates: connections[5] = {peer_info: "John@laptop123", mouse_id: 6001, keyboard_id: 6002}
+```
+
+**Step 4: ID Assignment Response**
+```
+MouseMux → RustDesk:
+PostMessage(rustdesk_hwnd, WM_APP+100, wParam=5, lParam=6001)  // mouse ID
+PostMessage(rustdesk_hwnd, WM_APP+110, wParam=5, lParam=6002)  // keyboard ID
+
+RustDesk receives in window_proc:
+- Stores: connections[5] = {peer_info: "John@laptop123", mouse_id: 6001, keyboard_id: 6002}
+- Calls: sync_mousemux_ids(5) to update Enigo
+```
+
+**Step 5: Input Injection**
+```
+When conn_id=5 sends mouse/keyboard input:
+- Look up IDs: connections[5] → mouse_id=6001, keyboard_id=6002
+- SendInput() with dwExtraInfo = 6001 (for mouse) or 6002 (for keyboard)
+- MouseMux sees ID 6001 → displays as "John@laptop123's cursor"
+```
+
+#### 3. Second Client Connection (Example: "Alice@desktop" as conn_id=6)
+
+```
+1. RustDesk → MouseMux: PostMessage(WM_APP+30, wParam=6, lParam=121)
+2. RustDesk → MouseMux: 14x PostMessage(WM_APP+32, wParam=6, lParam=char) for "Alice@desktop"
+3. RustDesk → MouseMux: PostMessage(WM_APP+32, wParam=6, lParam=0) — null
+4. RustDesk → MouseMux: PostMessage(WM_APP+34, wParam=6, lParam=0) — generate IDs
+5. MouseMux → RustDesk: PostMessage(WM_APP+100, wParam=6, lParam=6003) — mouse ID
+6. MouseMux → RustDesk: PostMessage(WM_APP+110, wParam=6, lParam=6004) — keyboard ID
+7. RustDesk stores: connections[6] = {peer_info: "Alice@desktop", mouse_id: 6003, keyboard_id: 6004}
+
+Now TWO users are active:
+- conn_id=5: John using IDs 6001/6002
+- conn_id=6: Alice using IDs 6003/6004
+```
+
+#### 4. Client Disconnection (conn_id=5 disconnects)
+
+```
+RustDesk → MouseMux:
+PostMessage(WM_APP+40, wParam=5, lParam=0)
+
+MouseMux:
+- Releases IDs 6001 and 6002
+- Removes connections[5]
+
+RustDesk:
+- Removes connections[5] from HashMap
+- No longer injects input with IDs 6001/6002
+```
+
+#### 5. RustDesk Shutdown
+
+```
+RustDesk → MouseMux:
+PostMessage(WM_APP+20, wParam=142, lParam=rustdesk_hwnd)
+
+RustDesk:
+- Destroys "rustdesk.mousemux.window.query" window
+- Terminates message loop thread
+
+MouseMux:
+- Releases all remaining IDs for this RustDesk instance
+```
+
+---
+
+### Peer Info String Specification
+
+**Format:** `"{name}@{id}"`
+- Example: "John's Laptop@abc123def456"
+- Source: `format!("{}@{}", self.lr.my_name, self.lr.my_id)`
+- Max length: **256 characters** (truncate if longer)
+- Character encoding: UTF-8 → cast to `u8` for lParam
+- Fallback: If both name and ID are empty → `format!("conn_{}", conn_id)`
+
+**Special Characters:**
+- Spaces: Allowed ("John's Laptop" → works)
+- Unicode: Should work (cast to u8, may truncate multibyte)
+- Null bytes: Only sent as terminator (lParam=0)
+
+**Transmission Rules:**
+1. Send WM_APP+32 for each character (sequential, no index needed)
+2. Always send null terminator (lParam=0) after last character
+3. Then send WM_APP+34 to trigger ID generation
+4. Do NOT send WM_APP+34 before null terminator
+
+---
+
+### State Management
+
+#### RustDesk State Structures
+
+```rust
+use std::collections::HashMap;
+
+pub struct MouseMuxState {
+    pub hwnd: Option<SendSyncHwnd>,  // Handle to "rustdesk.mousemux.window.query"
+    pub connections: HashMap<i32, MouseMuxConnectionIDs>,  // conn_id → IDs
+    pub pending_peer_info: HashMap<i32, String>,  // Temporary storage while receiving WM_APP+32
+}
+
+pub struct MouseMuxConnectionIDs {
+    pub conn_id: i32,
+    pub peer_info: String,       // e.g., "John@laptop123"
+    pub mouse_id: Option<u32>,   // Assigned by MouseMux
+    pub keyboard_id: Option<u32>, // Assigned by MouseMux
+}
+
+impl MouseMuxState {
+    pub fn new() -> Self {
+        Self {
+            hwnd: None,
+            connections: HashMap::new(),
+            pending_peer_info: HashMap::new(),
+        }
+    }
+}
+```
+
+**Old V2 (Global IDs - ❌ SUPERSEDED):**
+```rust
+pub struct MouseMuxState {
+    pub hwnd: Option<SendSyncHwnd>,
+    pub mouse_id: Option<u32>,      // ❌ All connections shared same IDs
+    pub keyboard_id: Option<u32>,   // ❌ Could not support multiple users
+}
+```
+
+---
+
+### Window Procedure Message Handling
+
+```rust
+unsafe extern "system" fn window_proc(
+    hwnd: HWND,
+    msg: UINT,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    match msg {
+        WM_MOUSEMUX_MOUSE_ID => {  // WM_APP+100
+            let conn_id = wparam as i32;
+            let mouse_id = lparam as u32;
+
+            log::info!("MouseMux V2.1: Received mouse ID {} for conn_id {}", mouse_id, conn_id);
+
+            if let Ok(mut state) = MOUSEMUX_STATE.lock() {
+                state.connections
+                    .entry(conn_id)
+                    .or_insert(MouseMuxConnectionIDs {
+                        conn_id,
+                        peer_info: String::new(),
+                        mouse_id: None,
+                        keyboard_id: None,
+                    })
+                    .mouse_id = Some(mouse_id);
+            }
+
+            // Sync to Enigo
+            crate::server::input_service::sync_mousemux_ids(conn_id);
+            0
+        }
+
+        WM_MOUSEMUX_KEYBOARD_ID => {  // WM_APP+110
+            let conn_id = wparam as i32;
+            let keyboard_id = lparam as u32;
+
+            log::info!("MouseMux V2.1: Received keyboard ID {} for conn_id {}", keyboard_id, conn_id);
+
+            if let Ok(mut state) = MOUSEMUX_STATE.lock() {
+                state.connections
+                    .entry(conn_id)
+                    .or_insert(MouseMuxConnectionIDs {
+                        conn_id,
+                        peer_info: String::new(),
+                        mouse_id: None,
+                        keyboard_id: None,
+                    })
+                    .keyboard_id = Some(keyboard_id);
+            }
+
+            // Sync to Enigo
+            crate::server::input_service::sync_mousemux_ids(conn_id);
+            0
+        }
+
+        _ => DefWindowProcA(hwnd, msg, wparam, lparam),
+    }
+}
+```
+
+---
+
+### Implementation Plan
+
+#### Phase 1: Update windows_mousemux.rs (Core Protocol)
+**File:** `src/platform/windows_mousemux.rs`
+
+- [x] Update constants: Add WM_APP+32, WM_APP+34, remove old V2 constants
+- [ ] Update `MouseMuxState` struct: Add `connections` HashMap and `pending_peer_info`
+- [ ] Update `window_proc`: Handle WM_APP+100 (mouse ID only, extract conn_id)
+- [ ] Update `window_proc`: Add WM_APP+110 handler (keyboard ID)
+- [ ] Update `window_proc`: Add WM_APP+32 handler (receive peer info chars)
+- [ ] Update `notify_startup()`: Keep version + HWND (already correct!)
+- [ ] Update `notify_shutdown()`: Change params to match notify_startup (version + HWND)
+- [ ] Update `request_ids()`: Change signature to `request_ids(conn_id: i32, peer_info: &str)`
+  - Send WM_APP+30 with conn_id and protocol version
+  - Send WM_APP+32 for each character
+  - Send WM_APP+34 to trigger generation
+- [ ] Update `release_ids()`: Change signature to `release_ids(conn_id: i32)`
+  - Send WM_APP+40 with conn_id only
+- [ ] Add `get_ids_for_connection(conn_id) -> Option<(u32, u32)>` function
+- [ ] Update `clear_ids()` to remove specific conn_id from HashMap
+
+#### Phase 2: Update connection.rs (Pass conn_id and peer_info)
+**File:** `src/server/connection.rs`
+
+- [ ] In `on_remote_authorized()` (line ~1671):
+  - Build peer_info string: `format!("{}@{}", self.lr.my_name, self.lr.my_id)`
+  - Truncate to 256 chars if longer
+  - Fallback to `format!("conn_{}", self.inner.id())` if empty
+  - Call `request_ids(self.inner.id(), &peer_info)`
+- [ ] In `on_close()` (line ~3778):
+  - Call `release_ids(self.inner.id())`
+
+#### Phase 3: Update input_service.rs (Per-Connection ID Sync)
+**File:** `src/server/input_service.rs`
+
+- [ ] Update `sync_mousemux_ids()` signature: `sync_mousemux_ids(conn_id: i32)`
+- [ ] Get IDs from windows_mousemux: `get_ids_for_connection(conn_id)`
+- [ ] Sync to Enigo: `ENIGO.lock().unwrap().set_mousemux_ids(conn_id, mouse_id, keyboard_id)`
+
+#### Phase 4: Update enigo/win_impl.rs (HashMap-Based ID Lookup)
+**File:** `libs/enigo/src/win/win_impl.rs`
+
+- [ ] Replace single `mousemux_mouse_id/keyboard_id` with `HashMap<i32, (u32, u32)>`
+- [ ] Add `set_mousemux_ids(conn_id, mouse_id, keyboard_id)` method
+- [ ] Update `get_mouse_extra_info()` to accept `conn_id` parameter
+- [ ] Update `get_keyboard_extra_info()` to accept `conn_id` parameter
+- [ ] Update all `mouse_event()` calls to pass conn_id and look up IDs
+- [ ] Update all `keybd_event()` calls to pass conn_id and look up IDs
+
+#### Phase 5: Update Input Event Flow (Add conn_id to Keyboard Events)
+**File:** `src/server/connection.rs` (input handling)
+
+- [ ] Find all keyboard input handling code
+- [ ] Add conn_id to `MessageInput::Key` enum variant: `Key((KeyEvent, i32))`
+- [ ] Pass `self.inner.id()` when creating keyboard input messages
+- [ ] Ensure conn_id propagates to Enigo at SendInput time
+
+---
+
+### Testing Checklist
+
+- [ ] **RustDesk startup**: Creates window, sends WM_APP+10 successfully
+- [ ] **Single client connects**: Gets unique mouse + keyboard IDs
+- [ ] **Two clients simultaneous**: Each gets different IDs (6001/6002, 6003/6004)
+- [ ] **Three clients**: All get unique IDs, all cursors visible in MouseMux
+- [ ] **Client disconnects**: IDs released via WM_APP+40, HashMap entry removed
+- [ ] **Client reconnects**: Gets NEW IDs (not recycled immediately)
+- [ ] **Peer info transmission**: All characters received correctly
+- [ ] **Peer info with spaces**: "John's Laptop" works correctly
+- [ ] **Peer info with special chars**: "@", "-", "_" work correctly
+- [ ] **Empty peer info**: Falls back to "conn_{id}"
+- [ ] **Long peer info (>256 chars)**: Truncates without crash
+- [ ] **Input injection**: Each client's input uses correct IDs
+- [ ] **RustDesk shutdown**: Sends WM_APP+20 with version + HWND
+
+---
+
+### Files to Modify
+
+1. **`src/platform/windows_mousemux.rs`** (~500 lines expected)
+   - Core protocol implementation
+   - HashMap state management
+   - All message handlers
+
+2. **`src/server/connection.rs`** (~1900 lines, modify ~10 lines)
+   - Build and pass peer_info string
+   - Pass conn_id to request/release functions
+
+3. **`src/server/input_service.rs`** (~300 lines, modify ~5 lines)
+   - Update sync function signature
+   - Pass conn_id when syncing
+
+4. **`libs/enigo/src/win/win_impl.rs`** (~800 lines, modify ~50 lines)
+   - HashMap-based ID storage
+   - Per-connection ID lookup
+   - Update all SendInput calls
+
+5. **`src/server/connection.rs` (input handling)** (~4000 lines, modify ~20 lines)
+   - Add conn_id to keyboard event enum
+   - Pass conn_id through input pipeline
+
+---
+
+### Commit Strategy
+
+**Commit after each phase** with descriptive messages:
+- `Phase 1: Implement MouseMux V2.1 protocol in windows_mousemux.rs`
+- `Phase 2: Update connection.rs to pass conn_id and peer_info`
+- `Phase 3: Update input_service for per-connection ID sync`
+- `Phase 4: Add HashMap-based ID lookup to Enigo`
+- `Phase 5: Add conn_id to keyboard input events`
+
+**Generate patch files** after each commit:
+```bash
+git format-patch -1 HEAD --output=mousemux-v2.1-phaseN.patch
+```
+
+Store patches in: `C:\Users\Developer\Desktop\test\mousemux-v2.1-patches\`
+
+---
+
 ### ✅ Protocol V2 Implementation Complete (October 8, 2025)
 
-**Status:** ✅ **FULLY IMPLEMENTED AND TESTED**
+**Status:** ⚠️ **SUPERSEDED BY V2.1** (see below for V2.1 specification)
 
 The original V1 implementation has been completely replaced with a new bidirectional asynchronous protocol design.
 

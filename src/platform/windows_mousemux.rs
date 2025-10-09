@@ -1,8 +1,9 @@
-// MouseMux Protocol V2 - Windows Message Window Implementation
-// Creates a message-only window to receive commands from MouseMux
+// MouseMux Protocol V2.1 - Windows Message Window Implementation
+// Per-connection ID assignment for multi-user collaboration
 
 use hbb_common::log;
-use std::sync::{Arc, Mutex, mpsc};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::ffi::CString;
 use winapi::{
@@ -17,20 +18,30 @@ use winapi::{
     },
 };
 
-// MouseMux Protocol V2 Messages
+// MouseMux Protocol V2.1 Messages
 const WM_APP: u32 = 0x8000;
-const WM_MOUSEMUX_STARTUP: u32 = WM_APP + 10;     // RustDesk → MouseMux: "I'm running"
-const WM_MOUSEMUX_SHUTDOWN: u32 = WM_APP + 20;    // RustDesk → MouseMux: "I'm exiting"
-const WM_MOUSEMUX_REQUEST_IDS: u32 = WM_APP + 30; // RustDesk → MouseMux: "Client connected, need IDs"
-const WM_MOUSEMUX_RELEASE_IDS: u32 = WM_APP + 40; // RustDesk → MouseMux: "Client disconnected, release IDs"
-const WM_MOUSEMUX_IDS: u32 = WM_APP + 100;        // MouseMux → RustDesk: ID assignment
+const WM_MOUSEMUX_STARTUP: u32 = WM_APP + 10;        // RustDesk → MouseMux: Startup (version + HWND)
+const WM_MOUSEMUX_SHUTDOWN: u32 = WM_APP + 20;       // RustDesk → MouseMux: Shutdown (version + HWND)
+const WM_MOUSEMUX_CONN_START: u32 = WM_APP + 30;     // RustDesk → MouseMux: Client connects (conn_id + protocol_version)
+const WM_MOUSEMUX_PEER_INFO_CHAR: u32 = WM_APP + 32; // RustDesk → MouseMux: Peer info character (conn_id + char_code)
+const WM_MOUSEMUX_PEER_INFO_DONE: u32 = WM_APP + 34; // RustDesk → MouseMux: Peer info complete (conn_id)
+const WM_MOUSEMUX_CONN_END: u32 = WM_APP + 40;       // RustDesk → MouseMux: Client disconnects (conn_id)
+const WM_MOUSEMUX_MOUSE_ID: u32 = WM_APP + 100;      // MouseMux → RustDesk: Mouse ID assigned (conn_id + mouse_id)
+const WM_MOUSEMUX_KEYBOARD_ID: u32 = WM_APP + 110;   // MouseMux → RustDesk: Keyboard ID assigned (conn_id + keyboard_id)
+
+// Protocol version and RustDesk version
+const PROTOCOL_VERSION: u32 = 121;  // V2.1 = 121
+const RUSTDESK_VERSION: u32 = 142;  // 1.4.2 = 142
 
 // MouseMux window to find
 const MOUSEMUX_WINDOW_CLASS: &str = "mousemux.main.window.query\0";
 
-// Window class and title
+// Window class and title for RustDesk's receiver window
 const WINDOW_CLASS_NAME: &str = "rustdesk.mousemux.window.query\0";
 const WINDOW_TITLE: &str = "rustdesk.mousemux.window.query\0";
+
+// Peer info max length
+const MAX_PEER_INFO_LENGTH: usize = 256;
 
 /// Wrapper for HWND that is Send + Sync safe
 /// HWND is just a pointer to a window handle, safe to send between threads
@@ -39,21 +50,34 @@ struct SendSyncHwnd(HWND);
 unsafe impl Send for SendSyncHwnd {}
 unsafe impl Sync for SendSyncHwnd {}
 
-/// Global state for MouseMux integration
-pub struct MouseMuxState {
-    pub hwnd: Option<SendSyncHwnd>,
+/// Per-connection MouseMux ID assignment
+#[derive(Clone, Debug)]
+pub struct MouseMuxConnectionIDs {
+    pub conn_id: i32,
+    pub peer_info: String,
     pub mouse_id: Option<u32>,
     pub keyboard_id: Option<u32>,
 }
 
-lazy_static::lazy_static! {
-    static ref MOUSEMUX_STATE: Arc<Mutex<MouseMuxState>> = Arc::new(Mutex::new(MouseMuxState {
-        hwnd: None,
-        mouse_id: None,
-        keyboard_id: None,
-    }));
+/// Global state for MouseMux integration (V2.1)
+pub struct MouseMuxState {
+    pub hwnd: Option<SendSyncHwnd>,  // RustDesk's message window handle
+    pub connections: HashMap<i32, MouseMuxConnectionIDs>,  // conn_id → IDs
+    pub pending_peer_info: HashMap<i32, String>,  // Temporary storage while receiving WM_APP+32
+}
 
-    // Channel to signal message loop thread to exit
+impl MouseMuxState {
+    pub fn new() -> Self {
+        Self {
+            hwnd: None,
+            connections: HashMap::new(),
+            pending_peer_info: HashMap::new(),
+        }
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref MOUSEMUX_STATE: Arc<Mutex<MouseMuxState>> = Arc::new(Mutex::new(MouseMuxState::new()));
     static ref MESSAGE_LOOP_HANDLE: Mutex<Option<thread::JoinHandle<()>>> = Mutex::new(None);
 }
 
@@ -65,28 +89,62 @@ unsafe extern "system" fn window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
-        WM_MOUSEMUX_IDS => {
-            // MouseMux is assigning us IDs
-            let mouse_id = wparam as u32;
+        WM_MOUSEMUX_MOUSE_ID => {  // WM_APP+100
+            let conn_id = wparam as i32;
+            let mouse_id = lparam as u32;
+
+            log::info!(
+                "MouseMux V2.1: Received mouse ID {} for conn_id {}",
+                mouse_id,
+                conn_id
+            );
+
+            // Store mouse ID in connection state
+            if let Ok(mut state) = MOUSEMUX_STATE.lock() {
+                let entry = state.connections
+                    .entry(conn_id)
+                    .or_insert(MouseMuxConnectionIDs {
+                        conn_id,
+                        peer_info: state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default(),
+                        mouse_id: None,
+                        keyboard_id: None,
+                    });
+                entry.mouse_id = Some(mouse_id);
+            }
+
+            // Sync to Enigo
+            crate::server::input_service::sync_mousemux_ids(conn_id);
+            0
+        }
+
+        WM_MOUSEMUX_KEYBOARD_ID => {  // WM_APP+110
+            let conn_id = wparam as i32;
             let keyboard_id = lparam as u32;
 
             log::info!(
-                "MouseMux V2: Received ID assignment - Mouse ID: {}, Keyboard ID: {}",
-                mouse_id,
-                keyboard_id
+                "MouseMux V2.1: Received keyboard ID {} for conn_id {}",
+                keyboard_id,
+                conn_id
             );
 
-            // Store IDs in global state
+            // Store keyboard ID in connection state
             if let Ok(mut state) = MOUSEMUX_STATE.lock() {
-                state.mouse_id = Some(mouse_id);
-                state.keyboard_id = Some(keyboard_id);
+                let entry = state.connections
+                    .entry(conn_id)
+                    .or_insert(MouseMuxConnectionIDs {
+                        conn_id,
+                        peer_info: state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default(),
+                        mouse_id: None,
+                        keyboard_id: None,
+                    });
+                entry.keyboard_id = Some(keyboard_id);
             }
 
-            // Sync IDs to input_service's Enigo instance
-            crate::server::input_service::sync_mousemux_ids();
-
+            // Sync to Enigo
+            crate::server::input_service::sync_mousemux_ids(conn_id);
             0
         }
+
         _ => DefWindowProcA(hwnd, msg, wparam, lparam),
     }
 }
@@ -141,14 +199,14 @@ fn create_message_window() -> Result<HWND, String> {
             ));
         }
 
-        log::info!("MouseMux V2: Created message window HWND: {:?}", hwnd);
+        log::info!("MouseMux V2.1: Created message window HWND: {:?}", hwnd);
         Ok(hwnd)
     }
 }
 
 /// Message loop thread - runs GetMessage loop
 fn message_loop_thread(hwnd: HWND) {
-    log::info!("MouseMux V2: Starting message loop thread");
+    log::info!("MouseMux V2.1: Starting message loop thread");
 
     unsafe {
         let mut msg: MSG = std::mem::zeroed();
@@ -160,12 +218,12 @@ fn message_loop_thread(hwnd: HWND) {
         }
     }
 
-    log::info!("MouseMux V2: Message loop thread exiting");
+    log::info!("MouseMux V2.1: Message loop thread exiting");
 }
 
 /// Initialize MouseMux message window and start background thread
 pub fn init_mousemux_window() -> Result<(), String> {
-    log::info!("MouseMux V2: Initializing message window");
+    log::info!("MouseMux V2.1: Initializing message window");
 
     // Create the window
     let hwnd = create_message_window()?;
@@ -177,7 +235,6 @@ pub fn init_mousemux_window() -> Result<(), String> {
     }
 
     // Start message loop in background thread
-    // Convert HWND to raw pointer value (usize) for thread safety
     let hwnd_raw = hwnd as usize;
     let handle = thread::spawn(move || {
         let hwnd = hwnd_raw as HWND;
@@ -187,13 +244,13 @@ pub fn init_mousemux_window() -> Result<(), String> {
     // Store thread handle
     *MESSAGE_LOOP_HANDLE.lock().unwrap() = Some(handle);
 
-    log::info!("MouseMux V2: Message window initialized successfully");
+    log::info!("MouseMux V2.1: Message window initialized successfully");
     Ok(())
 }
 
 /// Shutdown MouseMux message window
 pub fn shutdown_mousemux_window() {
-    log::info!("MouseMux V2: Shutting down message window");
+    log::info!("MouseMux V2.1: Shutting down message window");
 
     // Get HWND
     let hwnd = {
@@ -220,11 +277,11 @@ pub fn shutdown_mousemux_window() {
     {
         let mut state = MOUSEMUX_STATE.lock().unwrap();
         state.hwnd = None;
-        state.mouse_id = None;
-        state.keyboard_id = None;
+        state.connections.clear();
+        state.pending_peer_info.clear();
     }
 
-    log::info!("MouseMux V2: Message window shut down");
+    log::info!("MouseMux V2.1: Message window shut down");
 }
 
 /// Get RustDesk's message window HWND
@@ -232,42 +289,39 @@ pub fn get_rustdesk_hwnd() -> Option<HWND> {
     MOUSEMUX_STATE.lock().unwrap().hwnd.map(|SendSyncHwnd(h)| h)
 }
 
-/// Get current mouse ID (if assigned)
-pub fn get_mouse_id() -> Option<u32> {
-    MOUSEMUX_STATE.lock().unwrap().mouse_id
-}
-
-/// Get current keyboard ID (if assigned)
-pub fn get_keyboard_id() -> Option<u32> {
-    MOUSEMUX_STATE.lock().unwrap().keyboard_id
-}
-
-/// Get both mouse and keyboard IDs (convenience function for input_service)
-pub fn get_ids() -> (Option<u32>, Option<u32>) {
+/// Get IDs for a specific connection
+pub fn get_ids_for_connection(conn_id: i32) -> Option<(u32, u32)> {
     let state = MOUSEMUX_STATE.lock().unwrap();
-    (state.mouse_id, state.keyboard_id)
+    state.connections.get(&conn_id).and_then(|conn| {
+        match (conn.mouse_id, conn.keyboard_id) {
+            (Some(m), Some(k)) => Some((m, k)),
+            _ => None,
+        }
+    })
 }
 
-/// Clear assigned IDs (called on client disconnect)
-pub fn clear_ids() {
+/// Clear IDs for a specific connection
+pub fn clear_ids_for_connection(conn_id: i32) {
     let mut state = MOUSEMUX_STATE.lock().unwrap();
-    state.mouse_id = None;
-    state.keyboard_id = None;
-    log::info!("MouseMux V2: Cleared assigned IDs");
-    drop(state); // Release lock before syncing
+    if state.connections.remove(&conn_id).is_some() {
+        log::info!("MouseMux V2.1: Cleared IDs for conn_id {}", conn_id);
+        drop(state); // Release lock before syncing
 
-    // Sync cleared IDs to input_service's Enigo instance
-    crate::server::input_service::sync_mousemux_ids();
+        // Sync cleared state to Enigo
+        crate::server::input_service::sync_mousemux_ids(conn_id);
+    }
 }
 
-/// Check if IDs are currently assigned
-pub fn has_ids() -> bool {
+/// Check if a connection has IDs assigned
+pub fn has_ids_for_connection(conn_id: i32) -> bool {
     let state = MOUSEMUX_STATE.lock().unwrap();
-    state.mouse_id.is_some() && state.keyboard_id.is_some()
+    state.connections.get(&conn_id)
+        .map(|conn| conn.mouse_id.is_some() && conn.keyboard_id.is_some())
+        .unwrap_or(false)
 }
 
 // ============================================================================
-// MouseMux Protocol V2 - Communication Functions
+// MouseMux Protocol V2.1 - Communication Functions
 // ============================================================================
 
 /// Find MouseMux window
@@ -285,13 +339,13 @@ fn find_mousemux_window() -> Option<HWND> {
 }
 
 /// Send WM_APP+10: RustDesk startup notification
-/// wParam: RustDesk version number
-/// lParam: RustDesk's window HWND for verification
-pub fn notify_startup(version: u32) -> bool {
+/// wParam: RustDesk version (142)
+/// lParam: RustDesk's window HWND for callbacks
+pub fn notify_startup() -> bool {
     let rustdesk_hwnd = match get_rustdesk_hwnd() {
         Some(hwnd) => hwnd,
         None => {
-            log::warn!("MouseMux V2: Cannot notify startup - RustDesk window not created yet");
+            log::warn!("MouseMux V2.1: Cannot notify startup - RustDesk window not created yet");
             return false;
         }
     };
@@ -299,7 +353,7 @@ pub fn notify_startup(version: u32) -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("MouseMux V2: MouseMux window not found, not running");
+            log::info!("MouseMux V2.1: MouseMux window not found, not running");
             return false;
         }
     };
@@ -308,20 +362,20 @@ pub fn notify_startup(version: u32) -> bool {
         let result = PostMessageA(
             mousemux_hwnd,
             WM_MOUSEMUX_STARTUP,
-            version as WPARAM,
+            RUSTDESK_VERSION as WPARAM,
             rustdesk_hwnd as LPARAM,
         );
 
         if result == 0 {
             log::error!(
-                "MouseMux V2: Failed to post startup message, error: {}",
+                "MouseMux V2.1: Failed to post startup message, error: {}",
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "MouseMux V2: Posted startup notification (version={}, hwnd={:?})",
-                version,
+                "MouseMux V2.1: Posted startup notification (version={}, hwnd={:?})",
+                RUSTDESK_VERSION,
                 rustdesk_hwnd
             );
             true
@@ -330,78 +384,21 @@ pub fn notify_startup(version: u32) -> bool {
 }
 
 /// Send WM_APP+20: RustDesk shutdown notification
+/// wParam: RustDesk version (142) - consistent with WM_APP+10
+/// lParam: RustDesk's window HWND - consistent with WM_APP+10
 pub fn notify_shutdown() -> bool {
-    let mousemux_hwnd = match find_mousemux_window() {
+    let rustdesk_hwnd = match get_rustdesk_hwnd() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("MouseMux V2: MouseMux window not found on shutdown");
+            log::warn!("MouseMux V2.1: No RustDesk window on shutdown");
             return false;
         }
     };
 
-    unsafe {
-        let result = PostMessageA(mousemux_hwnd, WM_MOUSEMUX_SHUTDOWN, 0, 0);
-
-        if result == 0 {
-            log::error!(
-                "MouseMux V2: Failed to post shutdown message, error: {}",
-                std::io::Error::last_os_error()
-            );
-            false
-        } else {
-            log::info!("MouseMux V2: Posted shutdown notification");
-            true
-        }
-    }
-}
-
-/// Send WM_APP+30: Request ID assignment from MouseMux
-/// Called when a client connects
-pub fn request_ids() -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("MouseMux V2: MouseMux window not found, cannot request IDs");
-            return false;
-        }
-    };
-
-    unsafe {
-        let result = PostMessageA(mousemux_hwnd, WM_MOUSEMUX_REQUEST_IDS, 0, 0);
-
-        if result == 0 {
-            log::error!(
-                "MouseMux V2: Failed to post request IDs message, error: {}",
-                std::io::Error::last_os_error()
-            );
-            false
-        } else {
-            log::info!("MouseMux V2: Posted request for ID assignment");
-            true
-        }
-    }
-}
-
-/// Send WM_APP+40: Release IDs back to MouseMux
-/// Called when a client disconnects
-/// wParam: Mouse ID
-/// lParam: Keyboard ID
-pub fn release_ids() -> bool {
-    let (mouse_id, keyboard_id) = {
-        let state = MOUSEMUX_STATE.lock().unwrap();
-        match (state.mouse_id, state.keyboard_id) {
-            (Some(m), Some(k)) => (m, k),
-            _ => {
-                log::warn!("MouseMux V2: No IDs to release");
-                return false;
-            }
-        }
-    };
-
-    let mousemux_hwnd = match find_mousemux_window() {
-        Some(hwnd) => hwnd,
-        None => {
-            log::info!("MouseMux V2: MouseMux window not found on release");
+            log::info!("MouseMux V2.1: MouseMux window not found on shutdown");
             return false;
         }
     };
@@ -409,26 +406,199 @@ pub fn release_ids() -> bool {
     unsafe {
         let result = PostMessageA(
             mousemux_hwnd,
-            WM_MOUSEMUX_RELEASE_IDS,
-            mouse_id as WPARAM,
-            keyboard_id as LPARAM,
+            WM_MOUSEMUX_SHUTDOWN,
+            RUSTDESK_VERSION as WPARAM,
+            rustdesk_hwnd as LPARAM,
         );
 
         if result == 0 {
             log::error!(
-                "MouseMux V2: Failed to post release IDs message, error: {}",
+                "MouseMux V2.1: Failed to post shutdown message, error: {}",
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "MouseMux V2: Posted release IDs (mouse={}, keyboard={})",
-                mouse_id,
-                keyboard_id
+                "MouseMux V2.1: Posted shutdown notification (version={}, hwnd={:?})",
+                RUSTDESK_VERSION,
+                rustdesk_hwnd
+            );
+            true
+        }
+    }
+}
+
+/// Send WM_APP+30/32/34: Request ID assignment from MouseMux
+/// Called when a client connects
+///
+/// conn_id: RustDesk's internal connection ID
+/// peer_info: Peer identification string (format: "{name}@{id}")
+pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
+    let mousemux_hwnd = match find_mousemux_window() {
+        Some(hwnd) => hwnd,
+        None => {
+            log::info!("MouseMux V2.1: MouseMux window not found, cannot request IDs for conn_id {}", conn_id);
+            return false;
+        }
+    };
+
+    // Truncate peer_info to max length
+    let peer_info = if peer_info.len() > MAX_PEER_INFO_LENGTH {
+        &peer_info[..MAX_PEER_INFO_LENGTH]
+    } else {
+        peer_info
+    };
+
+    // Store peer_info in pending state
+    {
+        let mut state = MOUSEMUX_STATE.lock().unwrap();
+        state.pending_peer_info.insert(conn_id, peer_info.to_string());
+    }
+
+    unsafe {
+        // 1. Send WM_APP+30: Connection start
+        let result = PostMessageA(
+            mousemux_hwnd,
+            WM_MOUSEMUX_CONN_START,
+            conn_id as WPARAM,
+            PROTOCOL_VERSION as LPARAM,
+        );
+
+        if result == 0 {
+            log::error!(
+                "MouseMux V2.1: Failed to post connection start for conn_id {}, error: {}",
+                conn_id,
+                std::io::Error::last_os_error()
+            );
+            return false;
+        }
+
+        log::info!(
+            "MouseMux V2.1: Posted connection start for conn_id {} (protocol={})",
+            conn_id,
+            PROTOCOL_VERSION
+        );
+
+        // 2. Send WM_APP+32: Peer info character-by-character
+        for ch in peer_info.chars() {
+            let result = PostMessageA(
+                mousemux_hwnd,
+                WM_MOUSEMUX_PEER_INFO_CHAR,
+                conn_id as WPARAM,
+                ch as u32 as LPARAM,
             );
 
-            // Clear IDs after releasing
-            clear_ids();
+            if result == 0 {
+                log::error!(
+                    "MouseMux V2.1: Failed to post peer info char for conn_id {}, error: {}",
+                    conn_id,
+                    std::io::Error::last_os_error()
+                );
+                return false;
+            }
+        }
+
+        // 3. Send null terminator
+        let result = PostMessageA(
+            mousemux_hwnd,
+            WM_MOUSEMUX_PEER_INFO_CHAR,
+            conn_id as WPARAM,
+            0,  // null terminator
+        );
+
+        if result == 0 {
+            log::error!(
+                "MouseMux V2.1: Failed to post null terminator for conn_id {}, error: {}",
+                conn_id,
+                std::io::Error::last_os_error()
+            );
+            return false;
+        }
+
+        log::info!(
+            "MouseMux V2.1: Posted peer info '{}' for conn_id {} ({} chars + null)",
+            peer_info,
+            conn_id,
+            peer_info.len()
+        );
+
+        // 4. Send WM_APP+34: Trigger ID generation
+        let result = PostMessageA(
+            mousemux_hwnd,
+            WM_MOUSEMUX_PEER_INFO_DONE,
+            conn_id as WPARAM,
+            0,
+        );
+
+        if result == 0 {
+            log::error!(
+                "MouseMux V2.1: Failed to post peer info done for conn_id {}, error: {}",
+                conn_id,
+                std::io::Error::last_os_error()
+            );
+            return false;
+        }
+
+        log::info!(
+            "MouseMux V2.1: Posted request for ID generation for conn_id {}",
+            conn_id
+        );
+
+        true
+    }
+}
+
+/// Send WM_APP+40: Release IDs back to MouseMux
+/// Called when a client disconnects
+///
+/// conn_id: RustDesk's internal connection ID
+pub fn release_ids(conn_id: i32) -> bool {
+    let mousemux_hwnd = match find_mousemux_window() {
+        Some(hwnd) => hwnd,
+        None => {
+            log::info!("MouseMux V2.1: MouseMux window not found on release for conn_id {}", conn_id);
+            return false;
+        }
+    };
+
+    // Check if we have IDs to release
+    let has_ids = {
+        let state = MOUSEMUX_STATE.lock().unwrap();
+        state.connections.contains_key(&conn_id)
+    };
+
+    if !has_ids {
+        log::warn!("MouseMux V2.1: No IDs to release for conn_id {}", conn_id);
+        return false;
+    }
+
+    unsafe {
+        let result = PostMessageA(
+            mousemux_hwnd,
+            WM_MOUSEMUX_CONN_END,
+            conn_id as WPARAM,
+            0,  // lParam unused in V2.1
+        );
+
+        if result == 0 {
+            log::error!(
+                "MouseMux V2.1: Failed to post release IDs for conn_id {}, error: {}",
+                conn_id,
+                std::io::Error::last_os_error()
+            );
+            false
+        } else {
+            log::info!(
+                "MouseMux V2.1: Posted release IDs for conn_id {}",
+                conn_id
+            );
+
+            // Clear IDs from local state
+            clear_ids_for_connection(conn_id);
+
+            // Also remove from pending_peer_info
+            MOUSEMUX_STATE.lock().unwrap().pending_peer_info.remove(&conn_id);
+
             true
         }
     }
