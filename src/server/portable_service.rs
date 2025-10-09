@@ -950,7 +950,7 @@ pub mod client {
         }
     }
 
-    pub fn handle_key(evt: &KeyEvent) {
+    pub fn handle_key(evt: &KeyEvent, _conn: i32) {
         if RUNNING.lock().unwrap().clone() {
             handle_key_(evt).ok();
         } else {

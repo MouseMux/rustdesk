@@ -101,11 +101,13 @@ unsafe extern "system" fn window_proc(
 
             // Store mouse ID in connection state
             if let Ok(mut state) = MOUSEMUX_STATE.lock() {
+                // Get peer_info before mutable borrow
+                let peer_info = state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default();
                 let entry = state.connections
                     .entry(conn_id)
                     .or_insert(MouseMuxConnectionIDs {
                         conn_id,
-                        peer_info: state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default(),
+                        peer_info,
                         mouse_id: None,
                         keyboard_id: None,
                     });
@@ -129,11 +131,13 @@ unsafe extern "system" fn window_proc(
 
             // Store keyboard ID in connection state
             if let Ok(mut state) = MOUSEMUX_STATE.lock() {
+                // Get peer_info before mutable borrow
+                let peer_info = state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default();
                 let entry = state.connections
                     .entry(conn_id)
                     .or_insert(MouseMuxConnectionIDs {
                         conn_id,
-                        peer_info: state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default(),
+                        peer_info,
                         mouse_id: None,
                         keyboard_id: None,
                     });
@@ -318,6 +322,14 @@ pub fn has_ids_for_connection(conn_id: i32) -> bool {
     state.connections.get(&conn_id)
         .map(|conn| conn.mouse_id.is_some() && conn.keyboard_id.is_some())
         .unwrap_or(false)
+}
+
+/// Check if ANY connection currently has IDs assigned (for UI status)
+pub fn has_ids() -> bool {
+    let state = MOUSEMUX_STATE.lock().unwrap();
+    state.connections.iter().any(|(_, conn)| {
+        conn.mouse_id.is_some() && conn.keyboard_id.is_some()
+    })
 }
 
 // ============================================================================
