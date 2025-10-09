@@ -445,12 +445,22 @@ lazy_static::lazy_static! {
 }
 static EXITING: AtomicBool = AtomicBool::new(false);
 
-// MouseMux V2 integration helper functions
+// MouseMux V2.1 integration helper functions
 #[cfg(windows)]
-pub fn sync_mousemux_ids() {
+pub fn sync_mousemux_ids(conn_id: i32) {
     if let Ok(mut enigo) = ENIGO.lock() {
-        let (mouse_id, keyboard_id) = crate::platform::windows_mousemux::get_ids();
-        enigo.set_mousemux_ids(mouse_id, keyboard_id);
+        // Get IDs for this specific connection
+        let (mouse_id, keyboard_id) = crate::platform::windows_mousemux::get_ids_for_connection(conn_id)
+            .unwrap_or((None, None));
+
+        log::debug!(
+            "Syncing MouseMux IDs for conn_id {}: mouse={:?}, keyboard={:?}",
+            conn_id,
+            mouse_id,
+            keyboard_id
+        );
+
+        enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
     }
 }
 
