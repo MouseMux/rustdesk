@@ -7,16 +7,27 @@ use winapi;
 use crate::win::keycodes::*;
 use crate::{Key, KeyboardControllable, MouseButton, MouseControllable};
 use std::mem::*;
+use std::collections::HashMap;
 
 extern "system" {
     pub fn GetLastError() -> DWORD;
 }
 
 /// The main struct for handling the event emitting
-#[derive(Default)]
 pub struct Enigo {
-    mousemux_mouse_id: Option<ULONG_PTR>,
-    mousemux_keyboard_id: Option<ULONG_PTR>,
+    // HashMap: conn_id -> (mouse_id, keyboard_id)
+    mousemux_ids: HashMap<i32, (ULONG_PTR, ULONG_PTR)>,
+    // Current connection ID being processed (for looking up IDs during input injection)
+    current_conn_id: Option<i32>,
+}
+
+impl Default for Enigo {
+    fn default() -> Self {
+        Self {
+            mousemux_ids: HashMap::new(),
+            current_conn_id: None,
+        }
+    }
 }
 
 static mut LAYOUT: HKL = std::ptr::null_mut();
@@ -331,22 +342,47 @@ impl KeyboardControllable for Enigo {
 
 impl Enigo {
     /// Get the extra info value to use for input injection
-    /// Returns MouseMux mouse ID if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
+    /// Returns MouseMux mouse ID for current connection if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
     fn get_mouse_extra_info(&self) -> ULONG_PTR {
-        self.mousemux_mouse_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE)
+        if let Some(conn_id) = self.current_conn_id {
+            if let Some((mouse_id, _)) = self.mousemux_ids.get(&conn_id) {
+                return *mouse_id;
+            }
+        }
+        ENIGO_INPUT_EXTRA_VALUE
     }
 
-    /// Returns MouseMux keyboard ID if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
+    /// Returns MouseMux keyboard ID for current connection if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
     fn get_keyboard_extra_info(&self) -> ULONG_PTR {
-        self.mousemux_keyboard_id.unwrap_or(ENIGO_INPUT_EXTRA_VALUE)
+        if let Some(conn_id) = self.current_conn_id {
+            if let Some((_, keyboard_id)) = self.mousemux_ids.get(&conn_id) {
+                return *keyboard_id;
+            }
+        }
+        ENIGO_INPUT_EXTRA_VALUE
     }
 
-    /// Set MouseMux IDs from V2 protocol
+    /// Set MouseMux IDs from V2.1 protocol
     /// Called by input_service when IDs are received from MouseMux
-    pub fn set_mousemux_ids(&mut self, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
-        self.mousemux_mouse_id = mouse_id.map(|id| id as ULONG_PTR);
-        self.mousemux_keyboard_id = keyboard_id.map(|id| id as ULONG_PTR);
-        log::info!("MouseMux V2: IDs updated - Mouse: {:?}, Keyboard: {:?}", mouse_id, keyboard_id);
+    /// conn_id: The connection ID for this client
+    /// mouse_id: Assigned mouse ID for this connection (or None)
+    /// keyboard_id: Assigned keyboard ID for this connection (or None)
+    pub fn set_mousemux_ids(&mut self, conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+        if let (Some(m_id), Some(k_id)) = (mouse_id, keyboard_id) {
+            self.mousemux_ids.insert(conn_id, (m_id as ULONG_PTR, k_id as ULONG_PTR));
+            log::info!("MouseMux V2.1: IDs set for conn_id {}: Mouse={}, Keyboard={}",
+                conn_id, m_id, k_id);
+        } else {
+            // Remove IDs if either is None
+            self.mousemux_ids.remove(&conn_id);
+            log::info!("MouseMux V2.1: IDs cleared for conn_id {}", conn_id);
+        }
+    }
+
+    /// Set the current connection ID for input injection
+    /// Must be called before injecting input for a specific connection
+    pub fn set_current_conn_id(&mut self, conn_id: Option<i32>) {
+        self.current_conn_id = conn_id;
     }
 
     /// Gets the (width, height) of the main display in screen coordinates
