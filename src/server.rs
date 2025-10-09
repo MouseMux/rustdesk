@@ -568,9 +568,8 @@ pub async fn start_server(is_server: bool, no_server: bool) {
             if let Err(e) = crate::platform::windows_mousemux::init_mousemux_window() {
                 log::warn!("Failed to initialize MouseMux V2 window: {}", e);
             } else {
-                // Send startup notification to MouseMux
-                let version = hbb_common::get_version_number(&crate::VERSION) as u32;
-                crate::platform::windows_mousemux::notify_startup(version);
+                // Send startup notification to MouseMux (V2.1)
+                crate::platform::windows_mousemux::notify_startup();
             }
         }
         #[cfg(target_os = "linux")]
