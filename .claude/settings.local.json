@@ -14,7 +14,10 @@
       "Read(//o/rustdesk-build/rustdesk/**)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git format-patch:*)"
+      "Bash(git format-patch:*)",
+      "Bash(export:*)",
+      "Bash(rustc --version)",
+      "Bash(cargo build:*)"
     ],
     "deny": [],
     "ask": []
