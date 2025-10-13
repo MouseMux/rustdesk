@@ -22,17 +22,17 @@ use winapi::{
 const WM_APP: u32 = 0x8000;
 
 // Messages RustDesk sends to MouseMux
-const RUSTDESK_START: u32 = WM_APP + 10;        // rustdesk.start - RustDesk startup (version + HWND)
-const RUSTDESK_STOP: u32 = WM_APP + 20;         // rustdesk.stop - RustDesk shutdown (version + HWND)
-const RUSTDESK_CLIENT_OPEN: u32 = WM_APP + 30;  // rustdesk.client.open - Client connects (conn_id + protocol_version)
-const RUSTDESK_CLIENT_NAME: u32 = WM_APP + 40;  // rustdesk.client.name - Peer info character (conn_id + char_code)
-const RUSTDESK_CLIENT_READY: u32 = WM_APP + 50; // rustdesk.client.ready - Peer info complete (conn_id)
-const RUSTDESK_CLIENT_CLOSE: u32 = WM_APP + 60; // rustdesk.client.close - Client disconnects (conn_id)
+const MOUSEMUX_NOTIFY_STARTUP: u32 = WM_APP + 10;        // Notify MouseMux that RustDesk is starting (version + HWND)
+const MOUSEMUX_NOTIFY_SHUTDOWN: u32 = WM_APP + 20;       // Notify MouseMux that RustDesk is shutting down (version + HWND)
+const MOUSEMUX_REQUEST_CONNECTION: u32 = WM_APP + 30;    // Request connection slot (conn_id + protocol_version)
+const MOUSEMUX_SET_CONNECTION_NAME: u32 = WM_APP + 40;   // Send peer name character (conn_id + char_code)
+const MOUSEMUX_REQUEST_IDS: u32 = WM_APP + 50;           // Request ID assignment after name sent (conn_id)
+const MOUSEMUX_RELEASE_CONNECTION: u32 = WM_APP + 60;    // Release connection and IDs (conn_id)
 
 // Messages MouseMux sends to RustDesk
-const RUSTDESK_SELF_START: u32 = WM_APP + 100;  // MouseMux startup broadcast
-const RUSTDESK_REPLY_MS_ID: u32 = WM_APP + 110; // Mouse ID assigned (conn_id + mouse_id)
-const RUSTDESK_REPLY_KB_ID: u32 = WM_APP + 120; // Keyboard ID assigned (conn_id + keyboard_id)
+const MOUSEMUX_STARTUP_BROADCAST: u32 = WM_APP + 100;    // MouseMux startup broadcast - re-register
+const MOUSEMUX_MOUSE_ID_ASSIGNED: u32 = WM_APP + 110;    // Mouse ID assigned (conn_id + mouse_id)
+const MOUSEMUX_KEYBOARD_ID_ASSIGNED: u32 = WM_APP + 120; // Keyboard ID assigned (conn_id + keyboard_id)
 
 // Protocol version and RustDesk version
 const PROTOCOL_VERSION: u32 = 121;  // V2.1 = 121
@@ -94,8 +94,8 @@ unsafe extern "system" fn window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
-        RUSTDESK_SELF_START => {  // WM_APP+100 - MouseMux startup broadcast
-            log::info!("MouseMux v2.1 protocol: Received RUSTDESK_SELF_START - MouseMux is available");
+        MOUSEMUX_STARTUP_BROADCAST => {  // WM_APP+100 - MouseMux startup broadcast
+            log::info!("MouseMux v2.1 protocol: Received MOUSEMUX_STARTUP_BROADCAST - MouseMux is available");
 
             // Re-register RustDesk with MouseMux
             std::thread::spawn(|| {
@@ -109,12 +109,12 @@ unsafe extern "system" fn window_proc(
             0
         }
 
-        RUSTDESK_REPLY_MS_ID => {  // WM_APP+110 - rustdesk.client reply (mouse ID)
+        MOUSEMUX_MOUSE_ID_ASSIGNED => {  // WM_APP+110 - Mouse ID assigned
             let conn_id = wparam as i32;
             let mouse_id = lparam as u32;
 
             log::info!(
-                "rustdesk.client reply: Mouse ID {} for conn_id {}",
+                "MouseMux v2.1 protocol: Received MOUSEMUX_MOUSE_ID_ASSIGNED - Mouse ID {} for conn_id {}",
                 mouse_id,
                 conn_id
             );
@@ -139,12 +139,12 @@ unsafe extern "system" fn window_proc(
             0
         }
 
-        RUSTDESK_REPLY_KB_ID => {  // WM_APP+110 - rustdesk.client reply (keyboard ID)
+        MOUSEMUX_KEYBOARD_ID_ASSIGNED => {  // WM_APP+120 - Keyboard ID assigned
             let conn_id = wparam as i32;
             let keyboard_id = lparam as u32;
 
             log::info!(
-                "rustdesk.client reply: Keyboard ID {} for conn_id {}",
+                "MouseMux v2.1 protocol: Received MOUSEMUX_KEYBOARD_ID_ASSIGNED - Keyboard ID {} for conn_id {}",
                 keyboard_id,
                 conn_id
             );
@@ -399,14 +399,14 @@ fn find_mousemux_window() -> Option<HWND> {
     }
 }
 
-/// Send rustdesk.start (WM_APP+10): RustDesk startup notification
+/// Send MOUSEMUX_NOTIFY_STARTUP (WM_APP+10): RustDesk startup notification
 /// wParam: RustDesk version (142)
 /// lParam: RustDesk's window HWND for callbacks
 pub fn notify_startup() -> bool {
     let rustdesk_hwnd = match get_rustdesk_hwnd() {
         Some(hwnd) => hwnd,
         None => {
-            log::warn!("rustdesk.start: Cannot notify - RustDesk window not created yet");
+            log::warn!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - Cannot notify, RustDesk window not created yet");
             return false;
         }
     };
@@ -414,7 +414,7 @@ pub fn notify_startup() -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("rustdesk.start: MouseMux window not found");
+            log::info!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - MouseMux window not found");
             return false;
         }
     };
@@ -422,20 +422,20 @@ pub fn notify_startup() -> bool {
     unsafe {
         let result = PostMessageA(
             mousemux_hwnd,
-            RUSTDESK_START,
+            MOUSEMUX_NOTIFY_STARTUP,
             RUSTDESK_VERSION as WPARAM,
             rustdesk_hwnd as LPARAM,
         );
 
         if result == 0 {
             log::error!(
-                "rustdesk.start: Failed to post message, error: {}",
+                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - Failed to post message, error: {}",
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "rustdesk.start: Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
+                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
                 mousemux_hwnd,
                 RUSTDESK_VERSION,
                 rustdesk_hwnd
@@ -445,14 +445,14 @@ pub fn notify_startup() -> bool {
     }
 }
 
-/// Send rustdesk.stop (WM_APP+20): RustDesk shutdown notification
+/// Send MOUSEMUX_NOTIFY_SHUTDOWN (WM_APP+20): RustDesk shutdown notification
 /// wParam: RustDesk version (142)
 /// lParam: RustDesk's window HWND
 pub fn notify_shutdown() -> bool {
     let rustdesk_hwnd = match get_rustdesk_hwnd() {
         Some(hwnd) => hwnd,
         None => {
-            log::warn!("rustdesk.stop: No RustDesk window");
+            log::warn!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - No RustDesk window");
             return false;
         }
     };
@@ -460,7 +460,7 @@ pub fn notify_shutdown() -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("rustdesk.stop: MouseMux window not found");
+            log::info!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - MouseMux window not found");
             return false;
         }
     };
@@ -468,20 +468,20 @@ pub fn notify_shutdown() -> bool {
     unsafe {
         let result = PostMessageA(
             mousemux_hwnd,
-            RUSTDESK_STOP,
+            MOUSEMUX_NOTIFY_SHUTDOWN,
             RUSTDESK_VERSION as WPARAM,
             rustdesk_hwnd as LPARAM,
         );
 
         if result == 0 {
             log::error!(
-                "rustdesk.stop: Failed to post message, error: {}",
+                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - Failed to post message, error: {}",
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "rustdesk.stop: Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
+                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
                 mousemux_hwnd,
                 RUSTDESK_VERSION,
                 rustdesk_hwnd
@@ -491,7 +491,8 @@ pub fn notify_shutdown() -> bool {
     }
 }
 
-/// Send WM_APP+30/32/34: Request ID assignment from MouseMux
+/// Request ID assignment from MouseMux for a new connection
+/// Sends MOUSEMUX_REQUEST_CONNECTION, MOUSEMUX_SET_CONNECTION_NAME (char-by-char), and MOUSEMUX_REQUEST_IDS
 /// Called when a client connects
 ///
 /// conn_id: RustDesk's internal connection ID
@@ -519,17 +520,17 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
     }
 
     unsafe {
-        // 1. Send WM_APP+30: Connection start
+        // 1. Send MOUSEMUX_REQUEST_CONNECTION (WM_APP+30): Connection start
         let result = PostMessageA(
             mousemux_hwnd,
-            RUSTDESK_CLIENT_OPEN,
+            MOUSEMUX_REQUEST_CONNECTION,
             conn_id as WPARAM,
             PROTOCOL_VERSION as LPARAM,
         );
 
         if result == 0 {
             log::error!(
-                "rustdesk.client.open: Failed to post for conn_id {}, error: {}",
+                "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_CONNECTION - Failed to post for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
@@ -537,24 +538,24 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "rustdesk.client.open: Posted to MouseMux window {:?} for conn_id {} (protocol={})",
+            "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_CONNECTION - Posted to MouseMux window {:?} for conn_id {} (protocol={})",
             mousemux_hwnd,
             conn_id,
             PROTOCOL_VERSION
         );
 
-        // 2. Send WM_APP+32: Peer info character-by-character
+        // 2. Send MOUSEMUX_SET_CONNECTION_NAME (WM_APP+40): Peer info character-by-character
         for ch in peer_info.chars() {
             let result = PostMessageA(
                 mousemux_hwnd,
-                RUSTDESK_CLIENT_NAME,
+                MOUSEMUX_SET_CONNECTION_NAME,
                 conn_id as WPARAM,
                 ch as u32 as LPARAM,
             );
 
             if result == 0 {
                 log::error!(
-                    "rustdesk.client.name: Failed to post char for conn_id {}, error: {}",
+                    "MouseMux v2.1 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post char for conn_id {}, error: {}",
                     conn_id,
                     std::io::Error::last_os_error()
                 );
@@ -565,14 +566,14 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         // 3. Send null terminator
         let result = PostMessageA(
             mousemux_hwnd,
-            RUSTDESK_CLIENT_NAME,
+            MOUSEMUX_SET_CONNECTION_NAME,
             conn_id as WPARAM,
             0,  // null terminator
         );
 
         if result == 0 {
             log::error!(
-                "rustdesk.client.name: Failed to post null for conn_id {}, error: {}",
+                "MouseMux v2.1 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post null for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
@@ -580,23 +581,23 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "rustdesk.client.name: Posted peer info '{}' for conn_id {} ({} chars + null)",
+            "MouseMux v2.1 protocol: MOUSEMUX_SET_CONNECTION_NAME - Posted peer info '{}' for conn_id {} ({} chars + null)",
             peer_info,
             conn_id,
             peer_info.len()
         );
 
-        // 4. Send WM_APP+34: Trigger ID generation
+        // 4. Send MOUSEMUX_REQUEST_IDS (WM_APP+50): Trigger ID generation
         let result = PostMessageA(
             mousemux_hwnd,
-            RUSTDESK_CLIENT_READY,
+            MOUSEMUX_REQUEST_IDS,
             conn_id as WPARAM,
             0,
         );
 
         if result == 0 {
             log::error!(
-                "rustdesk.client.ready: Failed to post for conn_id {}, error: {}",
+                "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - Failed to post for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
@@ -604,7 +605,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "rustdesk.client.ready: Posted to MouseMux window {:?} for conn_id {}",
+            "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - Posted to MouseMux window {:?} for conn_id {}",
             mousemux_hwnd,
             conn_id
         );
@@ -613,7 +614,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
     }
 }
 
-/// Send WM_APP+40: Release IDs back to MouseMux
+/// Send MOUSEMUX_RELEASE_CONNECTION (WM_APP+60): Release IDs back to MouseMux
 /// Called when a client disconnects
 ///
 /// conn_id: RustDesk's internal connection ID
@@ -621,7 +622,7 @@ pub fn release_ids(conn_id: i32) -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("rustdesk.client.close: MouseMux window not found for conn_id {}", conn_id);
+            log::info!("MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - MouseMux window not found for conn_id {}", conn_id);
             return false;
         }
     };
@@ -633,28 +634,28 @@ pub fn release_ids(conn_id: i32) -> bool {
     };
 
     if !has_ids {
-        log::warn!("rustdesk.client.close: No IDs for conn_id {}", conn_id);
+        log::warn!("MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - No IDs for conn_id {}", conn_id);
         return false;
     }
 
     unsafe {
         let result = PostMessageA(
             mousemux_hwnd,
-            RUSTDESK_CLIENT_CLOSE,
+            MOUSEMUX_RELEASE_CONNECTION,
             conn_id as WPARAM,
             0,  // lParam unused in V2.1
         );
 
         if result == 0 {
             log::error!(
-                "rustdesk.client.close: Failed to post for conn_id {}, error: {}",
+                "MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - Failed to post for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "rustdesk.client.close: Posted to MouseMux window {:?} for conn_id {}",
+                "MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - Posted to MouseMux window {:?} for conn_id {}",
                 mousemux_hwnd,
                 conn_id
             );
