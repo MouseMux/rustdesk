@@ -462,6 +462,18 @@ pub fn sync_mousemux_ids(conn_id: i32) {
             keyboard_id
         );
 
+        // Update main process Enigo instance
+        enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
+
+        // Send IDs to portable service via IPC
+        crate::portable_service::client::send_mousemux_ids(conn_id, mouse_id, keyboard_id);
+    }
+}
+
+// Public helper for portable service to update its Enigo instance
+#[cfg(windows)]
+pub fn set_enigo_mousemux_ids(conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+    if let Ok(mut enigo) = ENIGO.lock() {
         enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
     }
 }

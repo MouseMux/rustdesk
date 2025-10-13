@@ -495,6 +495,16 @@ pub mod server {
                                             crate::input_service::handle_key_(&evt);
                                         }
                                     }
+                                    MouseMuxIds(conn_id, mouse_id, keyboard_id) => {
+                                        log::info!(
+                                            "Portable service: Received MouseMux IDs for conn_id {}: mouse={:?}, keyboard={:?}",
+                                            conn_id,
+                                            mouse_id,
+                                            keyboard_id
+                                        );
+                                        // Update the portable service's ENIGO instance
+                                        crate::input_service::set_enigo_mousemux_ids(conn_id, mouse_id, keyboard_id);
+                                    }
                                     _ => {}
                                 },
                                 _ => {}
@@ -960,6 +970,22 @@ pub mod client {
 
     pub fn running() -> bool {
         RUNNING.lock().unwrap().clone()
+    }
+
+    // MouseMux V2.1: Send IDs to portable service
+    pub fn send_mousemux_ids(conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+        if RUNNING.lock().unwrap().clone() {
+            log::debug!(
+                "Sending MouseMux IDs to portable service: conn_id={}, mouse={:?}, keyboard={:?}",
+                conn_id,
+                mouse_id,
+                keyboard_id
+            );
+            ipc_send(Data::DataPortableService(DataPortableService::MouseMuxIds(
+                conn_id, mouse_id, keyboard_id,
+            )))
+            .ok();
+        }
     }
 }
 
