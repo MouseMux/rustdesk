@@ -27,11 +27,127 @@ cargo build --release
 
 ## MouseMux Integration Implementation Status
 
-### 🔄 Protocol V2.1 - Per-Connection IDs (October 9, 2025)
+### ✅ Protocol V2.1 - Per-Connection IDs (October 9, 2025)
 
-**Status:** 🔄 **IN PROGRESS - Implementing per-connection ID support**
+**Status:** ✅ **COMPLETE AND BUILT SUCCESSFULLY**
+
+**Git Branch:** mousemux
+**Build Output:** target/release/rustdesk.exe (27MB, built Oct 9 16:11)
+**Total Commits:** 6 commits (Phase 1-5 + compilation fixes)
+**Patch Files:** 5 patches in `C:\Users\Developer\Desktop\test\mousemux-v2.1-patches\`
 
 **Why V2.1?** V2 was implemented but not yet tested. Design review revealed that the global ID model (all connections share same IDs) prevents multiple users from collaborating simultaneously. V2.1 redesigns the protocol to assign unique IDs per connection, enabling true multi-user collaboration.
+
+**Implementation Complete:**
+- ✅ Phase 1: Core protocol (windows_mousemux.rs) - HashMap-based state management
+- ✅ Phase 2: Connection lifecycle (connection.rs) - Pass conn_id and peer_info
+- ✅ Phase 3: ID synchronization (input_service.rs) - Per-connection ID sync
+- ✅ Phase 4: Enigo updates (win_impl.rs) - HashMap-based ID lookup
+- ✅ Phase 5: Keyboard events (connection.rs) - Propagate conn_id through input pipeline
+- ✅ All compilation errors fixed (type mismatches, borrow checker, function signatures)
+- ✅ Successful build: 15m 57s, 30 warnings (non-critical)
+- ✅ Comprehensive documentation: .claude/MOUSEMUX_V2.1_IMPLEMENTATION.md (511 lines)
+
+**Next Step:** Testing with actual MouseMux application to verify protocol implementation
+
+---
+
+### ✅ MouseMux V2.1: Portable Service IPC Synchronization Fix (October 13, 2025)
+
+**Status:** ✅ **COMPLETE - BUILD SUCCESSFUL**
+
+**Git Commit:** `b0c802199` - MouseMux V2.1: Fix portable service IPC synchronization for multi-client support
+**Patch File:** `C:\Users\Developer\Desktop\test\mousemux-v2.1-patches\0001-MouseMux-V2.1-Fix-portable-service-IPC-synchronizati.patch`
+**Build Time:** 15m 57s
+**Build Output:** target/release/rustdesk.exe
+
+#### Problem Description
+
+**Critical Bug:** MouseMux IDs were not synchronized to the portable service process, causing all SendInput calls to use the default ID (100) instead of unique per-connection IDs (6001+).
+
+**Root Cause:** RustDesk uses a two-process architecture on Windows:
+- **Main Process:** Handles networking, UI, receives input from remote clients
+- **Portable Service Process:** Elevated/SYSTEM process that performs actual SendInput calls
+
+Each process has its own separate Enigo instance. MouseMux V2.1 stored IDs only in the main process's Enigo, but all input injection happens in the portable service process which had no access to these IDs.
+
+#### Solution Implemented
+
+Added IPC (Inter-Process Communication) synchronization of MouseMux IDs between processes:
+
+**1. IPC Message Type (src/ipc.rs)**
+- Added `MouseMuxIds(i32, Option<u32>, Option<u32>)` variant to DataPortableService enum
+- Carries conn_id, mouse_id, and keyboard_id across process boundary
+
+**2. Synchronization Function (src/server/input_service.rs)**
+- Added `sync_mousemux_ids(conn_id)` function
+- Sends MouseMux IDs via IPC to portable service whenever they change
+- Added `set_enigo_mousemux_ids()` public helper to update Enigo without exposing private ENIGO static
+
+**3. Portable Service Handler (src/server/portable_service.rs)**
+- Added IPC message handler for MouseMuxIds in `run_ipc_client()`
+- Calls `set_enigo_mousemux_ids()` to update portable service's Enigo instance
+- Added `send_mousemux_ids()` function in client module to send IDs via IPC
+
+**4. Protocol Integration (src/platform/windows_mousemux.rs)**
+- Modified `set_ids()` and `clear_ids()` to call `sync_mousemux_ids()` after state changes
+- Ensures portable service stays synchronized with main process
+
+#### Data Flow
+
+```
+1. MouseMux → Main Process (WM_APP+100/110)
+   → window_proc receives mouse_id/keyboard_id for conn_id
+
+2. Main Process → windows_mousemux.rs
+   → set_ids() stores IDs in HashMap
+
+3. windows_mousemux.rs → input_service.rs
+   → sync_mousemux_ids(conn_id) called
+
+4. input_service.rs → IPC → Portable Service
+   → MouseMuxIds message sent via named pipe
+
+5. Portable Service IPC Handler
+   → Receives MouseMuxIds(conn_id, mouse_id, keyboard_id)
+
+6. Portable Service → set_enigo_mousemux_ids()
+   → Updates portable service's Enigo HashMap
+
+7. Portable Service → SendInput()
+   → Uses correct IDs (6001/6002) instead of default 100
+```
+
+#### Files Modified
+
+- **src/ipc.rs:** Added MouseMuxIds enum variant (+1 line)
+- **src/server/input_service.rs:** Added sync and helper functions (+12 lines)
+- **src/server/portable_service.rs:** Added IPC handler and sender (+26 lines)
+- **src/platform/windows_mousemux.rs:** Added sync calls in set_ids/clear_ids (+2 lines, refactored logging)
+
+**Net Change:** +82 insertions, -14 deletions
+
+#### Compilation Fix
+
+**Initial Build Error:** `error[E0603]: static 'ENIGO' is private`
+- portable_service.rs tried to access `crate::input_service::ENIGO.lock()` directly
+- ENIGO is a private static within lazy_static! block
+
+**Fix:** Created public helper function `set_enigo_mousemux_ids()` in input_service.rs
+- Provides controlled access to update Enigo without exposing private static
+- Maintains proper encapsulation and privacy boundaries
+
+#### Testing Status
+
+- ✅ **Build:** Successful compilation with no errors
+- ⏳ **Runtime:** Pending verification with MouseMux application
+- ⏳ **Multi-Client:** Pending test with multiple simultaneous connections
+- ⏳ **ID Verification:** Pending log verification that SendInput uses 6001+ instead of 100
+
+#### Documentation
+
+Complete implementation details documented in:
+- **MOUSEMUX_V2.1_HISTORY.md:** Comprehensive root cause analysis, data flow diagrams, verification steps
 
 ---
 

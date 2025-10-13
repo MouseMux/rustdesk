@@ -449,7 +449,7 @@ static EXITING: AtomicBool = AtomicBool::new(false);
 #[cfg(windows)]
 pub fn sync_mousemux_ids(conn_id: i32) {
     log::info!(
-        "MouseMux V2.1: sync_mousemux_ids() called for conn_id {}",
+        "MouseMux v2.1 protocol: sync_mousemux_ids() called for conn_id {}",
         conn_id
     );
 
@@ -461,7 +461,7 @@ pub fn sync_mousemux_ids(conn_id: i32) {
         };
 
         log::info!(
-            "MouseMux V2.1: Retrieved IDs from windows_mousemux for conn_id {}: mouse={:?}, keyboard={:?}",
+            "MouseMux v2.1 protocol: Retrieved IDs from windows_mousemux for conn_id {}: mouse={:?}, keyboard={:?}",
             conn_id,
             mouse_id,
             keyboard_id
@@ -470,7 +470,7 @@ pub fn sync_mousemux_ids(conn_id: i32) {
         // Update main process Enigo instance
         enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
         log::info!(
-            "MouseMux V2.1: Updated MAIN PROCESS Enigo instance for conn_id {}",
+            "MouseMux v2.1 protocol: Updated MAIN PROCESS Enigo instance for conn_id {}",
             conn_id
         );
 
@@ -478,7 +478,7 @@ pub fn sync_mousemux_ids(conn_id: i32) {
         crate::portable_service::client::send_mousemux_ids(conn_id, mouse_id, keyboard_id);
     } else {
         log::error!(
-            "MouseMux V2.1: Failed to lock ENIGO mutex for conn_id {}",
+            "MouseMux v2.1 protocol: Failed to lock ENIGO mutex for conn_id {}",
             conn_id
         );
     }
