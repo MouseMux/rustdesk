@@ -346,8 +346,13 @@ impl Enigo {
     fn get_mouse_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((mouse_id, _)) = self.mousemux_ids.get(&conn_id) {
+                log::debug!("MouseMux V2.1: get_mouse_extra_info() for conn_id {} returned ID {}", conn_id, mouse_id);
                 return *mouse_id;
+            } else {
+                log::debug!("MouseMux V2.1: get_mouse_extra_info() for conn_id {} - no IDs found, using default {}", conn_id, ENIGO_INPUT_EXTRA_VALUE);
             }
+        } else {
+            log::debug!("MouseMux V2.1: get_mouse_extra_info() - no current conn_id, using default {}", ENIGO_INPUT_EXTRA_VALUE);
         }
         ENIGO_INPUT_EXTRA_VALUE
     }
@@ -356,8 +361,13 @@ impl Enigo {
     fn get_keyboard_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((_, keyboard_id)) = self.mousemux_ids.get(&conn_id) {
+                log::debug!("MouseMux V2.1: get_keyboard_extra_info() for conn_id {} returned ID {}", conn_id, keyboard_id);
                 return *keyboard_id;
+            } else {
+                log::debug!("MouseMux V2.1: get_keyboard_extra_info() for conn_id {} - no IDs found, using default {}", conn_id, ENIGO_INPUT_EXTRA_VALUE);
             }
+        } else {
+            log::debug!("MouseMux V2.1: get_keyboard_extra_info() - no current conn_id, using default {}", ENIGO_INPUT_EXTRA_VALUE);
         }
         ENIGO_INPUT_EXTRA_VALUE
     }

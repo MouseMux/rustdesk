@@ -497,13 +497,17 @@ pub mod server {
                                     }
                                     MouseMuxIds(conn_id, mouse_id, keyboard_id) => {
                                         log::info!(
-                                            "Portable service: Received MouseMux IDs for conn_id {}: mouse={:?}, keyboard={:?}",
+                                            "MouseMux V2.1: PORTABLE SERVICE received IPC message for conn_id {}: mouse={:?}, keyboard={:?}",
                                             conn_id,
                                             mouse_id,
                                             keyboard_id
                                         );
                                         // Update the portable service's ENIGO instance
                                         crate::input_service::set_enigo_mousemux_ids(conn_id, mouse_id, keyboard_id);
+                                        log::info!(
+                                            "MouseMux V2.1: PORTABLE SERVICE updated Enigo instance for conn_id {}",
+                                            conn_id
+                                        );
                                     }
                                     _ => {}
                                 },
@@ -974,17 +978,29 @@ pub mod client {
 
     // MouseMux V2.1: Send IDs to portable service
     pub fn send_mousemux_ids(conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
-        if RUNNING.lock().unwrap().clone() {
-            log::debug!(
-                "Sending MouseMux IDs to portable service: conn_id={}, mouse={:?}, keyboard={:?}",
-                conn_id,
-                mouse_id,
-                keyboard_id
+        let running = RUNNING.lock().unwrap().clone();
+        log::info!(
+            "MouseMux V2.1: MAIN PROCESS sending IDs to portable service: conn_id={}, mouse={:?}, keyboard={:?}, portable_service_running={}",
+            conn_id,
+            mouse_id,
+            keyboard_id,
+            running
+        );
+
+        // Always send via IPC - messages will be queued if portable service not connected yet
+        // This fixes the race condition where IDs arrive before portable service connects
+        if let Err(e) = ipc_send(Data::DataPortableService(DataPortableService::MouseMuxIds(
+            conn_id, mouse_id, keyboard_id,
+        ))) {
+            log::warn!(
+                "MouseMux V2.1: Failed to send IDs via IPC (portable service may not be running yet): {}",
+                e
             );
-            ipc_send(Data::DataPortableService(DataPortableService::MouseMuxIds(
-                conn_id, mouse_id, keyboard_id,
-            )))
-            .ok();
+        } else {
+            log::info!(
+                "MouseMux V2.1: IPC message sent successfully for conn_id {}",
+                conn_id
+            );
         }
     }
 }
