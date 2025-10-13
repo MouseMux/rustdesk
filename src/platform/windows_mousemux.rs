@@ -415,7 +415,8 @@ pub fn notify_startup() -> bool {
             false
         } else {
             log::info!(
-                "rustdesk.start: Posted (version={}, hwnd={:?})",
+                "rustdesk.start: Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
+                mousemux_hwnd,
                 RUSTDESK_VERSION,
                 rustdesk_hwnd
             );
@@ -460,7 +461,8 @@ pub fn notify_shutdown() -> bool {
             false
         } else {
             log::info!(
-                "rustdesk.stop: Posted (version={}, hwnd={:?})",
+                "rustdesk.stop: Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
+                mousemux_hwnd,
                 RUSTDESK_VERSION,
                 rustdesk_hwnd
             );
@@ -515,7 +517,8 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "rustdesk.client.open: Posted for conn_id {} (protocol={})",
+            "rustdesk.client.open: Posted to MouseMux window {:?} for conn_id {} (protocol={})",
+            mousemux_hwnd,
             conn_id,
             PROTOCOL_VERSION
         );
@@ -581,7 +584,8 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "rustdesk.client.ready: Posted for conn_id {}",
+            "rustdesk.client.ready: Posted to MouseMux window {:?} for conn_id {}",
+            mousemux_hwnd,
             conn_id
         );
 
@@ -630,7 +634,8 @@ pub fn release_ids(conn_id: i32) -> bool {
             false
         } else {
             log::info!(
-                "rustdesk.client.close: Posted for conn_id {}",
+                "rustdesk.client.close: Posted to MouseMux window {:?} for conn_id {}",
+                mousemux_hwnd,
                 conn_id
             );
 
