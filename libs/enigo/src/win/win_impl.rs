@@ -51,7 +51,6 @@ fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32, extra_info: ULONG_PTR) -
         type_: INPUT_MOUSE,
         u,
     };
-    log::info!("MouseMux: SendInput(MOUSE) called with dwExtraInfo={}", extra_info);
     unsafe { SendInput(1, &mut input as LPINPUT, size_of::<INPUT>() as c_int) }
 }
 
@@ -88,7 +87,6 @@ fn keybd_event(mut flags: u32, vk: u16, scan: u16, extra_info: ULONG_PTR) -> DWO
         type_: INPUT_KEYBOARD,
         u: union,
     }; 1];
-    log::info!("MouseMux: SendInput(KEYBOARD) called with dwExtraInfo={}", extra_info);
     unsafe {
         SendInput(
             inputs.len() as UINT,
@@ -346,13 +344,8 @@ impl Enigo {
     fn get_mouse_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((mouse_id, _)) = self.mousemux_ids.get(&conn_id) {
-                log::debug!("MouseMux V2.1: get_mouse_extra_info() for conn_id {} returned ID {}", conn_id, mouse_id);
                 return *mouse_id;
-            } else {
-                log::debug!("MouseMux V2.1: get_mouse_extra_info() for conn_id {} - no IDs found, using default {}", conn_id, ENIGO_INPUT_EXTRA_VALUE);
             }
-        } else {
-            log::debug!("MouseMux V2.1: get_mouse_extra_info() - no current conn_id, using default {}", ENIGO_INPUT_EXTRA_VALUE);
         }
         ENIGO_INPUT_EXTRA_VALUE
     }
@@ -361,13 +354,8 @@ impl Enigo {
     fn get_keyboard_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((_, keyboard_id)) = self.mousemux_ids.get(&conn_id) {
-                log::debug!("MouseMux V2.1: get_keyboard_extra_info() for conn_id {} returned ID {}", conn_id, keyboard_id);
                 return *keyboard_id;
-            } else {
-                log::debug!("MouseMux V2.1: get_keyboard_extra_info() for conn_id {} - no IDs found, using default {}", conn_id, ENIGO_INPUT_EXTRA_VALUE);
             }
-        } else {
-            log::debug!("MouseMux V2.1: get_keyboard_extra_info() - no current conn_id, using default {}", ENIGO_INPUT_EXTRA_VALUE);
         }
         ENIGO_INPUT_EXTRA_VALUE
     }
@@ -380,12 +368,12 @@ impl Enigo {
     pub fn set_mousemux_ids(&mut self, conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
         if let (Some(m_id), Some(k_id)) = (mouse_id, keyboard_id) {
             self.mousemux_ids.insert(conn_id, (m_id as ULONG_PTR, k_id as ULONG_PTR));
-            log::info!("MouseMux V2.1: IDs set for conn_id {}: Mouse={}, Keyboard={}",
+            log::info!("MouseMux v2.1 protocol: IDs set for conn_id {}: Mouse={}, Keyboard={}",
                 conn_id, m_id, k_id);
         } else {
             // Remove IDs if either is None
             self.mousemux_ids.remove(&conn_id);
-            log::info!("MouseMux V2.1: IDs cleared for conn_id {}", conn_id);
+            log::info!("MouseMux v2.1 protocol: IDs cleared for conn_id {}", conn_id);
         }
     }
 
@@ -393,7 +381,7 @@ impl Enigo {
     /// Must be called before injecting input for a specific connection
     pub fn set_current_conn_id(&mut self, conn_id: Option<i32>) {
         self.current_conn_id = conn_id;
-        log::trace!("MouseMux V2.1: Current conn_id set to {:?}", conn_id);
+        log::trace!("MouseMux v2.1 protocol: Current conn_id set to {:?}", conn_id);
     }
 
     /// Gets the (width, height) of the main display in screen coordinates
