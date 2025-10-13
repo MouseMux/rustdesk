@@ -20,14 +20,19 @@ use winapi::{
 
 // MouseMux Protocol V2.1 Messages
 const WM_APP: u32 = 0x8000;
+
+// Messages RustDesk sends to MouseMux
 const RUSTDESK_START: u32 = WM_APP + 10;        // rustdesk.start - RustDesk startup (version + HWND)
 const RUSTDESK_STOP: u32 = WM_APP + 20;         // rustdesk.stop - RustDesk shutdown (version + HWND)
 const RUSTDESK_CLIENT_OPEN: u32 = WM_APP + 30;  // rustdesk.client.open - Client connects (conn_id + protocol_version)
-const RUSTDESK_CLIENT_NAME: u32 = WM_APP + 32;  // rustdesk.client.name - Peer info character (conn_id + char_code)
-const RUSTDESK_CLIENT_READY: u32 = WM_APP + 34; // rustdesk.client.ready - Peer info complete (conn_id)
-const RUSTDESK_CLIENT_CLOSE: u32 = WM_APP + 40; // rustdesk.client.close - Client disconnects (conn_id)
-const RUSTDESK_REPLY_MS_ID: u32 = WM_APP + 100; // MouseMux → RustDesk: Mouse ID assigned (conn_id + mouse_id)
-const RUSTDESK_REPLY_KB_ID: u32 = WM_APP + 110; // MouseMux → RustDesk: Keyboard ID assigned (conn_id + keyboard_id)
+const RUSTDESK_CLIENT_NAME: u32 = WM_APP + 40;  // rustdesk.client.name - Peer info character (conn_id + char_code)
+const RUSTDESK_CLIENT_READY: u32 = WM_APP + 50; // rustdesk.client.ready - Peer info complete (conn_id)
+const RUSTDESK_CLIENT_CLOSE: u32 = WM_APP + 60; // rustdesk.client.close - Client disconnects (conn_id)
+
+// Messages MouseMux sends to RustDesk
+const RUSTDESK_SELF_START: u32 = WM_APP + 100;  // MouseMux startup broadcast
+const RUSTDESK_REPLY_MS_ID: u32 = WM_APP + 110; // Mouse ID assigned (conn_id + mouse_id)
+const RUSTDESK_REPLY_KB_ID: u32 = WM_APP + 120; // Keyboard ID assigned (conn_id + keyboard_id)
 
 // Protocol version and RustDesk version
 const PROTOCOL_VERSION: u32 = 121;  // V2.1 = 121
@@ -89,7 +94,22 @@ unsafe extern "system" fn window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
-        RUSTDESK_REPLY_MS_ID => {  // WM_APP+100 - rustdesk.client reply (mouse ID)
+        RUSTDESK_SELF_START => {  // WM_APP+100 - MouseMux startup broadcast
+            log::info!("MouseMux v2.1 protocol: Received RUSTDESK_SELF_START - MouseMux is available");
+
+            // Re-register RustDesk with MouseMux
+            std::thread::spawn(|| {
+                // Small delay to let MouseMux finish initialization
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                notify_startup();
+
+                // Re-request IDs for all active connections
+                re_request_all_active_connections();
+            });
+            0
+        }
+
+        RUSTDESK_REPLY_MS_ID => {  // WM_APP+110 - rustdesk.client reply (mouse ID)
             let conn_id = wparam as i32;
             let mouse_id = lparam as u32;
 
@@ -647,5 +667,40 @@ pub fn release_ids(conn_id: i32) -> bool {
 
             true
         }
+    }
+}
+
+/// Re-request IDs for all active connections
+/// Called when MouseMux restarts (RUSTDESK_SELF_START received)
+fn re_request_all_active_connections() {
+    log::info!("MouseMux v2.1 protocol: Re-requesting IDs for all active connections");
+    
+    // Get list of connections that have peer_info
+    let connections_to_reregister: Vec<(i32, String)> = {
+        let state = MOUSEMUX_STATE.lock().unwrap();
+        state.connections
+            .iter()
+            .map(|(conn_id, conn)| (*conn_id, conn.peer_info.clone()))
+            .collect()
+    };
+    
+    if connections_to_reregister.is_empty() {
+        log::info!("MouseMux v2.1 protocol: No active connections to re-register");
+        return;
+    }
+    
+    log::info!(
+        "MouseMux v2.1 protocol: Re-registering {} active connection(s)",
+        connections_to_reregister.len()
+    );
+    
+    // Re-request IDs for each connection
+    for (conn_id, peer_info) in connections_to_reregister {
+        log::info!(
+            "MouseMux v2.1 protocol: Re-requesting IDs for conn_id {} (peer: {})",
+            conn_id,
+            peer_info
+        );
+        request_ids(conn_id, &peer_info);
     }
 }
