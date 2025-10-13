@@ -45,7 +45,7 @@ const MAX_PEER_INFO_LENGTH: usize = 256;
 
 /// Wrapper for HWND that is Send + Sync safe
 /// HWND is just a pointer to a window handle, safe to send between threads
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct SendSyncHwnd(HWND);
 unsafe impl Send for SendSyncHwnd {}
 unsafe impl Sync for SendSyncHwnd {}
@@ -209,14 +209,16 @@ fn create_message_window() -> Result<HWND, String> {
 }
 
 /// Message loop thread - runs GetMessage loop
-fn message_loop_thread(hwnd: HWND) {
+fn message_loop_thread(_hwnd: HWND) {
     log::info!("MouseMux V2.1: Starting message loop thread");
 
     unsafe {
         let mut msg: MSG = std::mem::zeroed();
 
         // Standard Windows message loop
-        while GetMessageA(&mut msg, hwnd, 0, 0) > 0 {
+        // IMPORTANT: Pass NULL (not hwnd) to receive ALL messages for this thread
+        // Message-only windows require NULL to receive PostMessage calls correctly
+        while GetMessageA(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
@@ -229,26 +231,53 @@ fn message_loop_thread(hwnd: HWND) {
 pub fn init_mousemux_window() -> Result<(), String> {
     log::info!("MouseMux V2.1: Initializing message window");
 
-    // Create the window
-    let hwnd = create_message_window()?;
+    // CRITICAL: Window must be created on THE SAME THREAD that runs the message loop!
+    // Windows delivers PostMessage to the thread that created the window.
+    // Create window + run message loop in the same background thread.
 
-    // Store HWND in global state
-    {
-        let mut state = MOUSEMUX_STATE.lock().unwrap();
-        state.hwnd = Some(SendSyncHwnd(hwnd));
-    }
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
 
-    // Start message loop in background thread
-    let hwnd_raw = hwnd as usize;
     let handle = thread::spawn(move || {
-        let hwnd = hwnd_raw as HWND;
+        // Create window on this thread
+        let hwnd = match create_message_window() {
+            Ok(h) => h,
+            Err(e) => {
+                tx.send(Err(e)).ok();
+                return;
+            }
+        };
+
+        log::info!("MouseMux V2.1: Window created on message loop thread: {:?}", hwnd);
+
+        // Store HWND and signal success
+        {
+            let mut state = MOUSEMUX_STATE.lock().unwrap();
+            state.hwnd = Some(SendSyncHwnd(hwnd));
+        }
+        tx.send(Ok(())).ok();
+
+        // Run message loop on this same thread
         message_loop_thread(hwnd);
     });
+
+    // Wait for window creation to complete
+    match rx.recv() {
+        Ok(Ok(())) => {
+            let hwnd = MOUSEMUX_STATE.lock().unwrap().hwnd;
+            log::info!("MouseMux V2.1: Message window initialized successfully: {:?}", hwnd);
+        }
+        Ok(Err(e)) => {
+            return Err(e);
+        }
+        Err(_) => {
+            return Err("Failed to receive window creation result".to_string());
+        }
+    }
 
     // Store thread handle
     *MESSAGE_LOOP_HANDLE.lock().unwrap() = Some(handle);
 
-    log::info!("MouseMux V2.1: Message window initialized successfully");
     Ok(())
 }
 
