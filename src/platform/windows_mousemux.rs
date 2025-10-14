@@ -173,7 +173,8 @@ unsafe extern "system" fn window_proc(
     }
 }
 
-/// Create message-only window for receiving MouseMux messages
+/// Create hidden top-level window for receiving MouseMux messages
+/// NOTE: Not a message-only window (HWND_MESSAGE) because MouseMux needs to find it via FindWindowA
 fn create_message_window() -> Result<HWND, String> {
     unsafe {
         // Register window class
@@ -202,15 +203,18 @@ fn create_message_window() -> Result<HWND, String> {
             ));
         }
 
-        // Create message-only window (parent = HWND_MESSAGE)
+        // Create hidden top-level window (NOT message-only, so MouseMux can find it)
+        // CRITICAL: MouseMux needs to find this window using FindWindowA, which cannot
+        // locate message-only windows (HWND_MESSAGE parent). Therefore, we create a
+        // normal hidden window (parent = NULL) that is findable but not visible.
         let window_title = WINDOW_TITLE.as_ptr() as *const i8;
         let hwnd = CreateWindowExA(
             0,                      // dwExStyle
             class_name,             // lpClassName
             window_title,           // lpWindowName
-            WS_OVERLAPPEDWINDOW,    // dwStyle
-            0, 0, 0, 0,             // x, y, width, height (ignored for message-only)
-            HWND_MESSAGE,           // hWndParent (message-only window)
+            0,                      // dwStyle (hidden window, no WS_VISIBLE)
+            0, 0, 0, 0,             // x, y, width, height
+            std::ptr::null_mut(),   // hWndParent (NULL = top-level, findable by FindWindowA)
             std::ptr::null_mut(),   // hMenu
             std::ptr::null_mut(),   // hInstance
             std::ptr::null_mut(),   // lpParam
@@ -237,7 +241,6 @@ fn message_loop_thread(_hwnd: HWND) {
 
         // Standard Windows message loop
         // IMPORTANT: Pass NULL (not hwnd) to receive ALL messages for this thread
-        // Message-only windows require NULL to receive PostMessage calls correctly
         while GetMessageA(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
