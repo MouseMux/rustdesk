@@ -52,35 +52,36 @@ echo "[CHECK] Verifying resources..." | tee -a "$LOGFILE"
 ls -lh resources/ | tee -a "$LOGFILE"
 echo "" | tee -a "$LOGFILE"
 
-echo "[5/7] Generating portable installer metadata..." | tee -a "$LOGFILE"
+echo "[5/7] Generating portable installer metadata and building packer..." | tee -a "$LOGFILE"
+echo "CRITICAL: generate.py creates data.bin AND builds the packer in one step" | tee -a "$LOGFILE"
+echo "The packer embeds data.bin at compile time via include_bytes!()" | tee -a "$LOGFILE"
 cd libs/portable
-"/c/Program Files/Python313/python" generate.py -f ../../resources -o ../../target/release -e ../../resources/rustdesk.exe 2>&1 | tee -a "$LOGFILE"
-echo "✓ Metadata generated!" | tee -a "$LOGFILE"
+# IMPORTANT: Output directory (-o) must be "." (libs/portable) so data.bin is created
+# in the same directory where the packer will be built, allowing include_bytes!() to find it
+"/c/Program Files/Python313/python" generate.py -f ../../resources -o . -e ../../resources/rustdesk.exe 2>&1 | tee -a "$LOGFILE"
+echo "✓ Metadata generated and packer built!" | tee -a "$LOGFILE"
 
-# CHECK: Verify metadata files were created
-echo "[CHECK] Verifying metadata files..." | tee -a "$LOGFILE"
-if [ -f "../../target/release/data.bin" ]; then
-    echo "✓ Found: data.bin" | tee -a "$LOGFILE"
-    ls -lh ../../target/release/data.bin | tee -a "$LOGFILE"
+# CHECK: Verify data.bin was created in libs/portable (needed for include_bytes!)
+echo "[CHECK] Verifying metadata files in libs/portable..." | tee -a "$LOGFILE"
+if [ -f "data.bin" ]; then
+    echo "✓ Found: libs/portable/data.bin" | tee -a "$LOGFILE"
+    ls -lh data.bin | tee -a "$LOGFILE"
 else
-    echo "✗ ERROR: data.bin NOT FOUND!" | tee -a "$LOGFILE"
+    echo "✗ ERROR: libs/portable/data.bin NOT FOUND!" | tee -a "$LOGFILE"
+    echo "Packer cannot embed data.bin without this file!" | tee -a "$LOGFILE"
     exit 1
 fi
-if [ -f "../../target/release/app_metadata.toml" ]; then
-    echo "✓ Found: app_metadata.toml" | tee -a "$LOGFILE"
-    cat ../../target/release/app_metadata.toml | tee -a "$LOGFILE"
+if [ -f "app_metadata.toml" ]; then
+    echo "✓ Found: libs/portable/app_metadata.toml" | tee -a "$LOGFILE"
+    cat app_metadata.toml | tee -a "$LOGFILE"
 else
-    echo "✗ ERROR: app_metadata.toml NOT FOUND!" | tee -a "$LOGFILE"
+    echo "✗ ERROR: libs/portable/app_metadata.toml NOT FOUND!" | tee -a "$LOGFILE"
     exit 1
 fi
 echo "" | tee -a "$LOGFILE"
 
-echo "[6/7] Building portable packer executable..." | tee -a "$LOGFILE"
-echo "Incremental rebuild to embed new data.bin" | tee -a "$LOGFILE"
-cd /o/rustdesk-build/rustdesk/libs/portable
-# cargo clean 2>&1 | tee -a "$LOGFILE"  # Commented out - only clean manually when needed
-cargo build --release 2>&1 | tee -a "$LOGFILE"
-echo "✓ Portable packer built with fresh data!" | tee -a "$LOGFILE"
+echo "[6/7] Verifying portable packer was built..." | tee -a "$LOGFILE"
+echo "Note: generate.py already built the packer (see above)" | tee -a "$LOGFILE"
 
 # CHECK: Verify packer was built
 echo "[CHECK] Verifying portable packer..." | tee -a "$LOGFILE"
@@ -112,8 +113,9 @@ ls -lh rustdesk-1.4.2-mousemux-v2.1-x86_64.exe | tee -a "$LOGFILE"
 echo "" | tee -a "$LOGFILE"
 
 echo "IMPORTANT NOTES:" | tee -a "$LOGFILE"
-echo "- Window title will show: 'RustDesk (MouseMux compliant edition)'" | tee -a "$LOGFILE"
-echo "- Install path will be: C:\\Program Files\\RustDesk\\" | tee -a "$LOGFILE"
-echo "- APP_NAME is set to 'RustDesk' (not the full branding name)" | tee -a "$LOGFILE"
+echo "- Window title: 'RustDesk' (uses get_app_name())" | tee -a "$LOGFILE"
+echo "- Install path: C:\\Program Files\\RustDesk\\" | tee -a "$LOGFILE"
+echo "- APP_NAME: 'RustDesk' (set in libs/hbb_common/src/config.rs)" | tee -a "$LOGFILE"
+echo "- MouseMux V2.1: Integrated with per-connection ID assignment" | tee -a "$LOGFILE"
 echo "" | tee -a "$LOGFILE"
 echo "Full log saved to: $LOGFILE" | tee -a "$LOGFILE"
