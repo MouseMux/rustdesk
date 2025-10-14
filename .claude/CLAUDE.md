@@ -1,12 +1,49 @@
 # RustDesk Build Process - Complete History
 
+## ✅ Latest Build - MouseMux V2.1 with Correct Install Path (October 14, 2025)
+
+**Status:** ✅ **COMPLETE - READY FOR TESTING**
+
+**Git Branch:** mousemux
+**Final Outputs:**
+- ✅ Executable: `target/release/rustdesk.exe` (27MB)
+- ✅ Installer: `rustdesk-1.4.2-mousemux-v2.1-x86_64.exe` (11MB)
+- ✅ Install path: `C:\Program Files\RustDesk\` (CORRECT!)
+- ✅ Window title: "RustDesk" (uses get_app_name())
+- ✅ MouseMux V2.1: Hidden top-level window (findable by MouseMux)
+
+**Critical Fixes Today:**
+1. **Fixed MouseMux window finding issue** (commit 7b8d1aa93)
+   - Changed from message-only window (HWND_MESSAGE) to hidden top-level window
+   - MouseMux can now find "rustdesk.mousemux.window.query" using FindWindowA
+
+2. **Fixed portable packer embedding wrong data.bin** (October 14)
+   - Root cause: Packer was embedding OLD data.bin from October 13
+   - Solution: Delete old libs/portable/data.bin, regenerate with correct rustdesk.exe
+   - The packer uses include_bytes!("../data.bin") at compile time
+   - CRITICAL: generate.py must output to libs/portable/ not target/release/
+
+**Build Timeline Today:**
+- Started: resources/rustdesk.exe from yesterday (Oct 13 17:35) - had correct APP_NAME
+- Problem: Portable packer still showed long install path
+- Investigation: Packer embedded libs/portable/data.bin from Oct 13 21:57 (OLD!)
+- Solution: Deleted old data.bin, regenerated with correct rustdesk.exe
+- Result: Fresh packer at 18:58 with correct install path
+
+**Git Commits:**
+- `5b1671ab5` - Update build script: Comment out cargo clean
+- `4753c1e54` - Fix build script: Correct data.bin generation path
+- `7b8d1aa93` - Fix MouseMux window finding issue
+
+---
+
 ## ✅ Build Success Summary
 
-**Status:** Successfully built RustDesk 1.4.2 with Sciter UI
+**Status:** Successfully built RustDesk 1.4.2 with Sciter UI and MouseMux V2.1
 
 **Final Outputs:**
 - ✅ Executable: `target/release/rustdesk.exe` (27MB)
-- ✅ Installer: `rustdesk-1.4.2-x86_64-sciter.exe` (11MB)
+- ✅ Installer: `rustdesk-1.4.2-mousemux-v2.1-x86_64.exe` (11MB)
 
 **Build Time:** ~15 minutes total
 
