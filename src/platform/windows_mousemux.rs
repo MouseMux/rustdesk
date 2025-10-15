@@ -591,11 +591,20 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         );
 
         // 4. Send MOUSEMUX_REQUEST_IDS (WM_APP+50): Trigger ID generation
+        // Get RustDesk's HWND to pass to MouseMux so it knows where to send the response
+        let rustdesk_hwnd = match get_rustdesk_hwnd() {
+            Some(hwnd) => hwnd as LPARAM,
+            None => {
+                log::error!("MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - No RustDesk window for conn_id {}", conn_id);
+                return false;
+            }
+        };
+
         let result = PostMessageA(
             mousemux_hwnd,
             MOUSEMUX_REQUEST_IDS,
             conn_id as WPARAM,
-            0,
+            rustdesk_hwnd,  // Pass RustDesk's HWND so MouseMux knows where to send IDs
         );
 
         if result == 0 {
@@ -608,9 +617,10 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - Posted to MouseMux window {:?} for conn_id {}",
+            "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - Posted to MouseMux window {:?} for conn_id {} (rustdesk_hwnd={:?})",
             mousemux_hwnd,
-            conn_id
+            conn_id,
+            rustdesk_hwnd
         );
 
         true
