@@ -32,10 +32,10 @@ echo "[3/5] Generating compressed data package..."
 cd libs/portable
 "/c/Program Files/Python313/python" generate.py \
     -f ../../resources \
-    -o ../../target/release \
+    -o . \
     -e ../../resources/rustdesk.exe
 cd "$PROJECT_ROOT"
-echo "✓ data.bin created"
+echo "✓ data.bin created in libs/portable/"
 echo ""
 
 echo "[4/5] Building portable packer with embedded data..."
