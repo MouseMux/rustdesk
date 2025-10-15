@@ -146,7 +146,8 @@ fn main() {
         }
         i += 1;
     }
-    let click_setup = args.is_empty() && arg_exe.to_lowercase().ends_with("install.exe");
+    // MouseMux V2.1: Never trigger install mode - user will handle installation
+    // Installation is managed externally by MouseMux launcher
     let quick_support = args.is_empty() && arg_exe.to_lowercase().ends_with("qs.exe");
 
     let mut ui = false;
@@ -154,13 +155,12 @@ fn main() {
     if let Some(exe) = setup(
         reader,
         None,
-        click_setup || args.contains(&"--silent-install".to_owned()),
+        args.contains(&"--silent-install".to_owned()),  // Removed click_setup from condition
         &args,
         &mut ui,
     ) {
-        if click_setup {
-            args = vec!["--install".to_owned()];
-        } else if quick_support {
+        // No longer checking click_setup - install mode disabled
+        if quick_support {
             args = vec!["--quick_support".to_owned()];
         }
         execute(exe, args, ui);
