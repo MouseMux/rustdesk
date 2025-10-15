@@ -341,7 +341,6 @@ class MyIdMenu: Reactor.Component {
                 <div .separator />
                 <li #allow-darktheme><span>{svg_checkmark}</span>{translate('Dark Theme')}</li>
                 <Languages />
-                {/* MouseMux Edition: Auto-update disabled */}
                 <li #about>{translate('About')} {" "}{handler.get_app_name()}</li>
             </menu>
         </popup>;
@@ -577,9 +576,7 @@ class App: Reactor.Component
                         </div>
                         <PasswordArea />
                     </div>
-                    {/* MouseMux V2.1: Show MouseMux banner instead of install prompt */}
                     {!is_win || handler.is_installed() ? "" : <InstallMe />}
-                    {/* MouseMux Edition: Auto-update disabled - users manage installation */}
                     {is_can_screen_recording ? "": <CanScreenRecording />}
                     {is_can_screen_recording && !handler.is_process_trusted(false) ? <TrustMe /> : ""}
                     {!service_stopped && is_can_screen_recording && handler.is_process_trusted(false) && handler.is_installed() && !handler.is_installed_daemon(false) ? <InstallDaemon /> : ""}
