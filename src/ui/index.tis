@@ -341,7 +341,7 @@ class MyIdMenu: Reactor.Component {
                 <div .separator />
                 <li #allow-darktheme><span>{svg_checkmark}</span>{translate('Dark Theme')}</li>
                 <Languages />
-                <li #allow-auto-update><span>{svg_checkmark}</span>{translate('Auto update')}</li> 
+                {/* MouseMux Edition: Auto-update disabled */}
                 <li #about>{translate('About')} {" "}{handler.get_app_name()}</li>
             </menu>
         </popup>;
@@ -577,9 +577,9 @@ class App: Reactor.Component
                         </div>
                         <PasswordArea />
                     </div>
-                    {!is_win || handler.is_installed() ? "": <InstallMe />}
-                    {software_update_url ? <UpdateMe /> : ""}
-                    {is_win && handler.is_installed() && !software_update_url && handler.is_installed_lower_version() ? <UpgradeMe /> : ""}
+                    {/* MouseMux V2.1: Show MouseMux banner instead of install prompt */}
+                    {!is_win || handler.is_installed() ? "" : <InstallMe />}
+                    {/* MouseMux Edition: Auto-update disabled - users manage installation */}
                     {is_can_screen_recording ? "": <CanScreenRecording />}
                     {is_can_screen_recording && !handler.is_process_trusted(false) ? <TrustMe /> : ""}
                     {!service_stopped && is_can_screen_recording && handler.is_process_trusted(false) && handler.is_installed() && !handler.is_installed_daemon(false) ? <InstallDaemon /> : ""}
@@ -622,13 +622,14 @@ class InstallMe: Reactor.Component {
     function render() {
         return <div .install-me>
             <span />
-            <div>{translate('install_tip')}</div>
-            <div><button #install-me .button>{translate('Install')}</button></div>
+            <div style="font-size: 1.3em; font-weight: bold; color: #ff8c00;">RustDesk (MouseMux Edition)</div>
+            <div>Multiple users can collaborate simultaneously on one host</div>
+            <div .link #mousemux-link style="color: #ff8c00; font-weight: bold;">mousemux.com</div>
         </div>;
     }
 
-    event click $(#install-me) {
-        handler.goto_install();
+    event click $(#mousemux-link) {
+        handler.open_url("https://mousemux.com");
     }
 }
 

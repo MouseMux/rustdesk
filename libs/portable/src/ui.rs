@@ -3,10 +3,11 @@ use nwg::NativeUi;
 use std::cell::RefCell;
 
 const GIF_DATA: &[u8] = include_bytes!("./res/spin.gif");
-const LABEL_DATA: &[u8] = include_bytes!("./res/label.png");
 const GIF_SIZE: i32 = 32;
-const BG_COLOR: [u8; 3] = [90, 90, 120];
-const BORDER_COLOR: [u8; 3] = [40, 40, 40];
+// MouseMux branding colors
+const BG_COLOR: [u8; 3] = [30, 30, 35];        // Dark gray background
+const BORDER_COLOR: [u8; 3] = [255, 140, 0];    // Orange border (MouseMux color)
+const TEXT_COLOR: [u8; 3] = [255, 255, 255];    // White text
 const GIF_DELAY: u64 = 30;
 
 #[derive(Default)]
@@ -16,7 +17,11 @@ pub struct BasicApp {
     border_image: nwg::ImageFrame,
     bg_image: nwg::ImageFrame,
     gif_image: nwg::ImageFrame,
-    label_image: nwg::ImageFrame,
+
+    // MouseMux branding - text labels instead of image
+    title_label: nwg::Label,
+    subtitle_label: nwg::Label,
+    url_label: nwg::Label,
 
     border_layout: nwg::GridLayout,
     bg_layout: nwg::GridLayout,
@@ -68,7 +73,7 @@ impl BasicApp {
 
 mod basic_app_ui {
     use super::*;
-    use native_windows_gui::{self as nwg, Bitmap};
+    use native_windows_gui::{self as nwg};
     use nwg::{Event, GridLayoutItem};
     use std::cell::RefCell;
     use std::ops::Deref;
@@ -115,11 +120,29 @@ mod basic_app_ui {
                 .background_color(Some(BG_COLOR))
                 .build(&mut data.gif_image)?;
 
-            nwg::ImageFrame::builder()
+            // MouseMux branding labels
+            // Note: native-windows-gui labels don't support custom text color,
+            // they use the system default text color
+            nwg::Label::builder()
                 .parent(&data.bg_image)
+                .text("RustDesk (MouseMux Edition)")
+                .h_align(nwg::HTextAlign::Center)
                 .background_color(Some(BG_COLOR))
-                .bitmap(Some(&Bitmap::from_bin(LABEL_DATA)?))
-                .build(&mut data.label_image)?;
+                .build(&mut data.title_label)?;
+
+            nwg::Label::builder()
+                .parent(&data.bg_image)
+                .text("Multiple users can collaborate simultaneously")
+                .h_align(nwg::HTextAlign::Center)
+                .background_color(Some(BG_COLOR))
+                .build(&mut data.subtitle_label)?;
+
+            nwg::Label::builder()
+                .parent(&data.bg_image)
+                .text("mousemux.com")
+                .h_align(nwg::HTextAlign::Center)
+                .background_color(Some(BG_COLOR))
+                .build(&mut data.url_label)?;
 
             nwg::AnimationTimer::builder()
                 .parent(&data.window)
@@ -158,12 +181,18 @@ mod basic_app_ui {
 
             nwg::GridLayout::builder()
                 .parent(&ui.bg_image)
-                .spacing(0)
-                .margin([0, 0, 0, 0])
+                .spacing(2)
+                .margin([10, 10, 10, 10])
                 .max_column(Some(col_cnt as _))
                 .max_row(Some(row_cnt as _))
-                .child_item(GridLayoutItem::new(&ui.gif_image, 2, 1, 1, 1))
-                .child_item(GridLayoutItem::new(&ui.label_image, 3, 1, 3, 1))
+                // Spinner in the center-left
+                .child_item(GridLayoutItem::new(&ui.gif_image, 0, 1, 2, 1))
+                // Title label - top row, spanning most columns
+                .child_item(GridLayoutItem::new(&ui.title_label, 2, 0, 5, 1))
+                // Subtitle label - middle row
+                .child_item(GridLayoutItem::new(&ui.subtitle_label, 2, 1, 5, 1))
+                // URL label - bottom row
+                .child_item(GridLayoutItem::new(&ui.url_label, 2, 2, 5, 1))
                 .build(&ui.inner_layout)?;
 
             // Events
