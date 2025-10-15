@@ -8,9 +8,14 @@ set -e  # Exit on error
 PROJECT_ROOT="/o/rustdesk-build/rustdesk"
 export VCPKG_ROOT="/o/rustdesk-build/vcpkg"
 
+# Record start time
+START_TIME=$(date +%s)
+START_TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
 echo "========================================"
 echo "RustDesk MouseMux Edition Build Script"
 echo "========================================"
+echo "Started at: $START_TIMESTAMP"
 echo ""
 
 # Change to project directory
@@ -57,12 +62,25 @@ echo ""
 echo "========================================"
 echo "Build complete!"
 echo "========================================"
+
+# Calculate elapsed time
+END_TIME=$(date +%s)
+END_TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+ELAPSED=$((END_TIME - START_TIME))
+MINUTES=$((ELAPSED / 60))
+SECONDS=$((ELAPSED % 60))
+
+echo ""
+echo "Started:  $START_TIMESTAMP"
+echo "Finished: $END_TIMESTAMP"
+echo "Duration: ${MINUTES}m ${SECONDS}s"
 echo ""
 echo "Outputs:"
-echo "  • Main exe:       target/release/rustdesk.exe"
+echo "  • Main exe:        target/release/rustdesk.exe"
 echo "  • Portable packer: target/release/rustdesk-portable-packer.exe"
 echo ""
 echo "To test:"
 echo "  1. Run rustdesk.exe directly (requires sciter.dll in same folder)"
 echo "  2. Run rustdesk-portable-packer.exe (self-extracting, includes everything)"
 echo ""
+echo "========================================"
