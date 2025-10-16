@@ -83,7 +83,7 @@ cargo build --release
 - ✅ Phase 5: Keyboard events (connection.rs) - Propagate conn_id through input pipeline
 - ✅ All compilation errors fixed (type mismatches, borrow checker, function signatures)
 - ✅ Successful build: 15m 57s, 30 warnings (non-critical)
-- ✅ Comprehensive documentation: .claude/MOUSEMUX_V2.1_IMPLEMENTATION.md (511 lines)
+- ✅ Comprehensive documentation: .docs/MOUSEMUX_V2.1_IMPLEMENTATION.md (511 lines)
 
 **Next Step:** Testing with actual MouseMux application to verify protocol implementation
 
@@ -1348,3 +1348,173 @@ export VCPKG_ROOT=/o/rustdesk-build/vcpkg && cd /o/rustdesk-build/rustdesk && ca
 - Clean build: ~13-15 minutes
 - Installer generation: ~1 minute
 - Total: ~15-20 minutes for complete build from scratch
+
+---
+
+## 📦 Patch Distribution Preparation (October 16, 2025)
+
+**Status:** ✅ **COMPLETE - PATCHES READY FOR DISTRIBUTION**
+
+### Session Overview
+
+Generated complete patch set from the mousemux branch for distribution and application to fresh RustDesk forks.
+
+### Patches Generated
+
+**Location:** `C:\Users\Developer\Desktop\test\mousemux-patches-clean/`
+
+**Count:** 49 patches (complete git history from base commit db4296533 to current mousemux branch HEAD)
+
+**Status:** All authorship references removed from commit messages, ready for distribution
+
+### What Was Done
+
+1. **Generated Complete Patch Set**
+   - Used `git format-patch db4296533..mousemux`
+   - Generated all 49 commits as individual patch files
+   - Patches numbered 0001 through 0049 in chronological order
+
+2. **Cleaned Authorship References**
+   - Removed all automated authorship references
+      - Preserved all technical content and file changes
+   - Verified authorship tags cleaned in commit messages
+
+3. **Organized Patch Directory**
+   - Moved obsolete patch directories to `attic/`:
+     - `mousemux-patches/` (45 patches - incomplete)
+     - `mousemux-patches-latest/` (1 patch - old)
+     - `mousemux-v2.1-patches-clean/` (empty)
+     - Loose patch files (3 files - duplicates)
+   - Only `mousemux-patches-clean/` remains with current work
+
+4. **Created Documentation**
+   - `PATCH_CLEANING_COMPLETE.md` - Cleaning process summary
+   - `PATCH_DIRECTORY_GUIDE.md` - Complete patch inventory and usage guide
+   - Updated this DOCUMENTATION.md with session information
+
+### Verification
+
+**Patch Count Match:**
+```bash
+# Git commits on mousemux branch from base
+git log --oneline db4296533..mousemux | wc -l
+# Output: 49
+
+# Patches in mousemux-patches-clean/
+ls mousemux-patches-clean/*.patch | wc -l
+# Output: 49
+
+# ✅ PERFECT MATCH - Complete coverage
+```
+
+**Authorship Tags Removed:**
+```bash
+grep -E "(authorship tags)" \
+  mousemux-patches-clean/*.patch
+# No results = Success! All references removed.
+```
+
+### How to Apply Patches
+
+To apply all 49 patches to a fresh RustDesk fork:
+
+```bash
+# 1. Clone fresh RustDesk fork
+git clone <your-rustdesk-fork-url>
+cd rustdesk
+
+# 2. Checkout base commit (nightly branch base)
+git checkout db4296533
+
+# 3. Apply all patches in order
+git am C:/Users/Developer/Desktop/test/mousemux-patches-clean/*.patch
+
+# 4. Verify all 49 commits applied
+git log --oneline -50 | head -49
+
+# 5. Create mousemux branch
+git checkout -b mousemux
+```
+
+### Patch Content Summary
+
+The 49 patches chronicle the complete MouseMux integration development:
+
+- **0001-0011:** Initial MouseMux V1 implementation and documentation
+- **0012-0019:** MouseMux V2 bidirectional async protocol
+- **0020-0028:** MouseMux V2.1 per-connection ID system and IPC synchronization
+- **0029-0038:** Window title tracking, protocol refinements, and additional features
+- **0039-0049:** Recent fixes including:
+  - UAC/update prompt removal for MouseMux Edition
+  - Window title showing connected user count
+  - Standalone service configuration fixes
+  - Build script improvements
+  - MouseMux branding and UI customization
+
+### Files Modified Throughout All Patches
+
+**Core Implementation:**
+- `src/platform/windows_mousemux.rs` - New file, MouseMux V2.1 protocol
+- `src/server/connection.rs` - Connection lifecycle integration
+- `src/server/input_service.rs` - ID synchronization and IPC
+- `src/server/portable_service.rs` - Portable service IPC handling
+- `libs/enigo/src/win/win_impl.rs` - Per-connection ID lookup
+- `src/ipc.rs` - MouseMux IPC message types
+
+**Documentation:**
+- `.docs/DOCUMENTATION.md` - Complete build and implementation history
+- `.docs/MOUSEMUX_V2.1_IMPLEMENTATION.md` - V2.1 technical specification
+- `README.md` - MouseMux Edition branding
+
+**Build & Configuration:**
+- `build.py` - Build script improvements
+- `libs/portable/generate.py` - Installer generation fixes
+- `libs/hbb_common` - Submodule update for APP_NAME change
+
+**UI & Branding:**
+- UI files for MouseMux Edition customization
+- Window title updates for user count display
+
+### Next Steps
+
+1. **Share Patches:** The `mousemux-patches-clean/` directory is ready for:
+   - Distribution to team members
+   - Application to fresh RustDesk forks
+   - Submission as pull requests (if desired)
+   - Archival for future reference
+
+2. **Testing:** Once patches are applied to a fresh fork:
+   - Build RustDesk with the patches
+   - Test with MouseMux application
+   - Verify multi-client scenarios
+   - Test late-start scenario (MouseMux starts after clients connect)
+
+3. **Known Issues to Debug:**
+   - Late-start scenario may need additional investigation (from previous session)
+   - Comprehensive logging added but not yet tested with actual MouseMux application
+
+### Session Files
+
+All session documentation located in:
+```
+C:\Users\Developer\Desktop\test\
+├── mousemux-patches-clean/           (49 patches - USE THIS)
+├── attic/                            (old patches, archived)
+├── MOUSEMUX_V2.1_SESSION_2025-10-16.md  (33KB detailed session history)
+├── PATCH_CLEANING_COMPLETE.md        (2KB cleaning summary)
+└── PATCH_DIRECTORY_GUIDE.md          (5KB patch inventory)
+```
+
+### Git Branch Status
+
+**Current Branch:** mousemux (49 commits ahead of base)
+**Base Commit:** db4296533 (nightly branch)
+**Branch Status:** Clean, no uncommitted changes
+
+All work is committed and patches are generated. Ready for fresh fork application.
+
+---
+
+**Last Updated:** October 16, 2025
+**Session Duration:** ~2 hours (patch generation, cleaning, and documentation)
+**Status:** ✅ Complete - Ready for distribution and testing
