@@ -84,7 +84,7 @@ impl MouseMuxState {
 lazy_static::lazy_static! {
     static ref MOUSEMUX_STATE: Arc<Mutex<MouseMuxState>> = Arc::new(Mutex::new(MouseMuxState::new()));
     static ref MESSAGE_LOOP_HANDLE: Mutex<Option<thread::JoinHandle<()>>> = Mutex::new(None);
-    static ref MAIN_WINDOW_HWND: Mutex<Option<HWND>> = Mutex::new(None);
+    static ref MAIN_WINDOW_HWND: Mutex<Option<SendSyncHwnd>> = Mutex::new(None);
     static ref CONNECTED_USERS_COUNT: Mutex<usize> = Mutex::new(0);
 }
 
@@ -391,7 +391,7 @@ pub fn has_ids() -> bool {
 
 /// Set the main Sciter window HWND (call this from UI initialization)
 pub fn set_main_window_hwnd(hwnd: HWND) {
-    *MAIN_WINDOW_HWND.lock().unwrap() = Some(hwnd);
+    *MAIN_WINDOW_HWND.lock().unwrap() = Some(SendSyncHwnd(hwnd));
     log::info!("MouseMux: Main window HWND set to {:?}", hwnd);
 }
 
@@ -400,7 +400,7 @@ fn update_main_window_title() {
     let count = *CONNECTED_USERS_COUNT.lock().unwrap();
     let hwnd = *MAIN_WINDOW_HWND.lock().unwrap();
 
-    if let Some(hwnd) = hwnd {
+    if let Some(SendSyncHwnd(hwnd)) = hwnd {
         unsafe {
             let title = if count == 0 {
                 CString::new("RustDesk (MouseMux compliant edition)").unwrap()
@@ -564,10 +564,22 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         peer_info
     };
 
-    // Store peer_info in pending state
+    // Store peer_info in pending state AND create connection entry immediately
+    // This ensures the connection is tracked even before IDs are assigned
     {
         let mut state = MOUSEMUX_STATE.lock().unwrap();
         state.pending_peer_info.insert(conn_id, peer_info.to_string());
+
+        // Create or update connection entry with peer_info
+        state.connections
+            .entry(conn_id)
+            .or_insert(MouseMuxConnectionIDs {
+                conn_id,
+                peer_info: peer_info.to_string(),
+                mouse_id: None,
+                keyboard_id: None,
+            })
+            .peer_info = peer_info.to_string();  // Update peer_info if entry already exists
     }
 
     unsafe {
