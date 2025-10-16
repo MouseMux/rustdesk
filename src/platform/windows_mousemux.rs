@@ -13,7 +13,7 @@ use winapi::{
     },
     um::winuser::{
         CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, FindWindowA,
-        GetMessageA, PostMessageA, PostQuitMessage, RegisterClassExA, TranslateMessage,
+        GetMessageA, PostMessageA, PostQuitMessage, RegisterClassExA, SetWindowTextA, TranslateMessage,
         HWND_MESSAGE, MSG, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, CS_HREDRAW, CS_VREDRAW,
     },
 };
@@ -84,6 +84,8 @@ impl MouseMuxState {
 lazy_static::lazy_static! {
     static ref MOUSEMUX_STATE: Arc<Mutex<MouseMuxState>> = Arc::new(Mutex::new(MouseMuxState::new()));
     static ref MESSAGE_LOOP_HANDLE: Mutex<Option<thread::JoinHandle<()>>> = Mutex::new(None);
+    static ref MAIN_WINDOW_HWND: Mutex<Option<HWND>> = Mutex::new(None);
+    static ref CONNECTED_USERS_COUNT: Mutex<usize> = Mutex::new(0);
 }
 
 /// Window procedure callback - handles messages from MouseMux
@@ -166,6 +168,9 @@ unsafe extern "system" fn window_proc(
 
             // Sync to Enigo
             crate::server::input_service::sync_mousemux_ids(conn_id);
+
+            // User is now fully connected (has both mouse and keyboard IDs)
+            increment_connected_users();
             0
         }
 
@@ -382,6 +387,49 @@ pub fn has_ids() -> bool {
     state.connections.iter().any(|(_, conn)| {
         conn.mouse_id.is_some() && conn.keyboard_id.is_some()
     })
+}
+
+/// Set the main Sciter window HWND (call this from UI initialization)
+pub fn set_main_window_hwnd(hwnd: HWND) {
+    *MAIN_WINDOW_HWND.lock().unwrap() = Some(hwnd);
+    log::info!("MouseMux: Main window HWND set to {:?}", hwnd);
+}
+
+/// Update the main window title with connected user count
+fn update_main_window_title() {
+    let count = *CONNECTED_USERS_COUNT.lock().unwrap();
+    let hwnd = *MAIN_WINDOW_HWND.lock().unwrap();
+
+    if let Some(hwnd) = hwnd {
+        unsafe {
+            let title = if count == 0 {
+                CString::new("RustDesk (MouseMux compliant edition)").unwrap()
+            } else {
+                CString::new(format!("RustDesk (MouseMux compliant edition, {} users connected)", count)).unwrap()
+            };
+
+            SetWindowTextA(hwnd, title.as_ptr());
+            log::info!("MouseMux: Updated window title - {} users connected", count);
+        }
+    }
+}
+
+/// Increment connected users count and update window title
+pub fn increment_connected_users() {
+    let mut count = CONNECTED_USERS_COUNT.lock().unwrap();
+    *count += 1;
+    drop(count);  // Release lock before updating title
+    update_main_window_title();
+}
+
+/// Decrement connected users count and update window title
+pub fn decrement_connected_users() {
+    let mut count = CONNECTED_USERS_COUNT.lock().unwrap();
+    if *count > 0 {
+        *count -= 1;
+    }
+    drop(count);  // Release lock before updating title
+    update_main_window_title();
 }
 
 // ============================================================================
@@ -672,6 +720,9 @@ pub fn release_ids(conn_id: i32) -> bool {
                 mousemux_hwnd,
                 conn_id
             );
+
+            // User is disconnecting - decrement count
+            decrement_connected_users();
 
             // Clear IDs from local state
             clear_ids_for_connection(conn_id);
