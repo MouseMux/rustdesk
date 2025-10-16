@@ -63,7 +63,8 @@
       "Bash(/o/rustdesk-build/rustdesk/target/release/rustdesk.exe --version)",
       "Read(//c/Users/Developer/AppData/Local//**)",
       "Bash(./rustdesk.exe --version)",
-      "Read(//c/Users/Developer/Desktop/**)"
+      "Read(//c/Users/Developer/Desktop/**)",
+      "Bash(\"/c/Program Files/Python313/python\" -c \"\nimport os\nimport glob\n\n# Try different path formats\npath1 = ''C:/Users/Developer/Desktop/test/mousemux-patches-clean/*.patch''\npath2 = ''/c/Users/Developer/Desktop/test/mousemux-patches-clean/*.patch''\npath3 = ''C:\\\\Users\\\\Developer\\\\Desktop\\\\test\\\\mousemux-patches-clean\\\\*.patch''\n\nprint(''Testing glob patterns:'')\nprint(f''Path 1 matches: {len(glob.glob(path1))}'')\nprint(f''Path 2 matches: {len(glob.glob(path2))}'')\nprint(f''Path 3 matches: {len(glob.glob(path3))}'')\n\n# Show what works\nfor p in [path1, path2, path3]:\n    matches = glob.glob(p)\n    if matches:\n        print(f''\\nUsing: {p}'')\n        print(f''Found {len(matches)} files'')\n        print(f''First 3: {[os.path.basename(m) for m in matches[:3]]}'')\n        break\n\")"
     ],
     "deny": [],
     "ask": []
