@@ -62,7 +62,8 @@
       "Bash(ls:*)",
       "Bash(/o/rustdesk-build/rustdesk/target/release/rustdesk.exe --version)",
       "Read(//c/Users/Developer/AppData/Local//**)",
-      "Bash(./rustdesk.exe --version)"
+      "Bash(./rustdesk.exe --version)",
+      "Read(//c/Users/Developer/Desktop/**)"
     ],
     "deny": [],
     "ask": []

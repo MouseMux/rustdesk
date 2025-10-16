@@ -33,6 +33,7 @@ const MOUSEMUX_RELEASE_CONNECTION: u32 = WM_APP + 60;    // Release connection a
 const MOUSEMUX_STARTUP_BROADCAST: u32 = WM_APP + 100;    // MouseMux startup broadcast - re-register
 const MOUSEMUX_MOUSE_ID_ASSIGNED: u32 = WM_APP + 110;    // Mouse ID assigned (conn_id + mouse_id)
 const MOUSEMUX_KEYBOARD_ID_ASSIGNED: u32 = WM_APP + 120; // Keyboard ID assigned (conn_id + keyboard_id)
+const MOUSEMUX_REQUEST_EXIT: u32 = WM_APP + 200;         // MouseMux requests RustDesk to exit
 
 // Protocol version and RustDesk version
 const PROTOCOL_VERSION: u32 = 121;  // V2.1 = 121
@@ -116,7 +117,8 @@ unsafe extern "system" fn window_proc(
             let mouse_id = lparam as u32;
 
             log::info!(
-                "MouseMux v2.1 protocol: Received MOUSEMUX_MOUSE_ID_ASSIGNED - Mouse ID {} for conn_id {}",
+                "MouseMux v2.1 protocol: Received MOUSEMUX_MOUSE_ID_ASSIGNED - Mouse ID 0x{:X} ({}) for conn_id {}",
+                mouse_id,
                 mouse_id,
                 conn_id
             );
@@ -134,9 +136,19 @@ unsafe extern "system" fn window_proc(
                         keyboard_id: None,
                     });
                 entry.mouse_id = Some(mouse_id);
+
+                log::info!(
+                    "MouseMux v2.1 protocol: Stored mouse ID 0x{:X} in HashMap for conn_id {}",
+                    mouse_id,
+                    conn_id
+                );
             }
 
             // Sync to Enigo
+            log::info!(
+                "MouseMux v2.1 protocol: Calling sync_mousemux_ids() for conn_id {} after receiving mouse ID",
+                conn_id
+            );
             crate::server::input_service::sync_mousemux_ids(conn_id);
             0
         }
@@ -146,7 +158,8 @@ unsafe extern "system" fn window_proc(
             let keyboard_id = lparam as u32;
 
             log::info!(
-                "MouseMux v2.1 protocol: Received MOUSEMUX_KEYBOARD_ID_ASSIGNED - Keyboard ID {} for conn_id {}",
+                "MouseMux v2.1 protocol: Received MOUSEMUX_KEYBOARD_ID_ASSIGNED - Keyboard ID 0x{:X} ({}) for conn_id {}",
+                keyboard_id,
                 keyboard_id,
                 conn_id
             );
@@ -164,14 +177,32 @@ unsafe extern "system" fn window_proc(
                         keyboard_id: None,
                     });
                 entry.keyboard_id = Some(keyboard_id);
+
+                log::info!(
+                    "MouseMux v2.1 protocol: Stored keyboard ID 0x{:X} in HashMap for conn_id {}",
+                    keyboard_id,
+                    conn_id
+                );
             }
 
             // Sync to Enigo
+            log::info!(
+                "MouseMux v2.1 protocol: Calling sync_mousemux_ids() for conn_id {} after receiving keyboard ID",
+                conn_id
+            );
             crate::server::input_service::sync_mousemux_ids(conn_id);
 
             // User is now fully connected (has both mouse and keyboard IDs)
             increment_connected_users();
             0
+        }
+
+        MOUSEMUX_REQUEST_EXIT => {  // WM_APP+200 - MouseMux requests RustDesk to exit
+            log::info!("MouseMux v2.1 protocol: Received MOUSEMUX_REQUEST_EXIT - Exiting RustDesk");
+
+            // Exit the process
+            // This will trigger cleanup handlers and gracefully shut down
+            std::process::exit(0);
         }
 
         _ => DefWindowProcA(hwnd, msg, wparam, lparam),
@@ -549,14 +580,6 @@ pub fn notify_shutdown() -> bool {
 /// conn_id: RustDesk's internal connection ID
 /// peer_info: Peer identification string (format: "{name}@{id}")
 pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
-    let mousemux_hwnd = match find_mousemux_window() {
-        Some(hwnd) => hwnd,
-        None => {
-            log::info!("MouseMux v2.1 protocol: MouseMux window not found, cannot request IDs for conn_id {}", conn_id);
-            return false;
-        }
-    };
-
     // Truncate peer_info to max length
     let peer_info = if peer_info.len() > MAX_PEER_INFO_LENGTH {
         &peer_info[..MAX_PEER_INFO_LENGTH]
@@ -564,8 +587,10 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         peer_info
     };
 
-    // Store peer_info in pending state AND create connection entry immediately
-    // This ensures the connection is tracked even before IDs are assigned
+    // CRITICAL: Store connection in HashMap FIRST, before checking if MouseMux is running
+    // This ensures the connection is tracked even if MouseMux isn't running yet
+    // When MouseMux starts later and sends WM_APP+100, re_request_all_active_connections()
+    // will find this connection in the HashMap and request IDs for it
     {
         let mut state = MOUSEMUX_STATE.lock().unwrap();
         state.pending_peer_info.insert(conn_id, peer_info.to_string());
@@ -580,7 +605,18 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
                 keyboard_id: None,
             })
             .peer_info = peer_info.to_string();  // Update peer_info if entry already exists
+
+        log::info!("MouseMux v2.1 protocol: Registered connection {} with peer_info '{}' in HashMap", conn_id, peer_info);
     }
+
+    // Now check if MouseMux is running
+    let mousemux_hwnd = match find_mousemux_window() {
+        Some(hwnd) => hwnd,
+        None => {
+            log::info!("MouseMux v2.1 protocol: MouseMux window not found, connection {} tracked for later", conn_id);
+            return false;  // Connection is tracked, but can't send messages yet
+        }
+    };
 
     unsafe {
         // 1. Send MOUSEMUX_REQUEST_CONNECTION (WM_APP+30): Connection start
@@ -711,6 +747,23 @@ pub fn release_ids(conn_id: i32) -> bool {
         return false;
     }
 
+    // CRITICAL: Reset IDs to 100 BEFORE sending disconnect message
+    // This prevents latent SendInput calls from using invalid IDs after disconnect
+    log::info!(
+        "MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - Resetting IDs to 100 for conn_id {} before sending disconnect",
+        conn_id
+    );
+
+    // Clear IDs from local state FIRST
+    clear_ids_for_connection(conn_id);
+
+    // User is disconnecting - decrement count
+    decrement_connected_users();
+
+    // Also remove from pending_peer_info
+    MOUSEMUX_STATE.lock().unwrap().pending_peer_info.remove(&conn_id);
+
+    // NOW send the disconnect message to MouseMux
     unsafe {
         let result = PostMessageA(
             mousemux_hwnd,
@@ -732,16 +785,6 @@ pub fn release_ids(conn_id: i32) -> bool {
                 mousemux_hwnd,
                 conn_id
             );
-
-            // User is disconnecting - decrement count
-            decrement_connected_users();
-
-            // Clear IDs from local state
-            clear_ids_for_connection(conn_id);
-
-            // Also remove from pending_peer_info
-            MOUSEMUX_STATE.lock().unwrap().pending_peer_info.remove(&conn_id);
-
             true
         }
     }
