@@ -85,6 +85,8 @@ pub fn start(args: &mut [String]) {
     #[cfg(windows)]
     allow_err!(sciter::set_options(sciter::RuntimeOptions::UxTheming(true)));
     frame.set_title("RustDesk (MouseMux compliant)");
+    #[cfg(windows)]
+    crate::platform::windows_mousemux::set_main_window_hwnd(frame.get_hwnd() as _);
     #[cfg(target_os = "macos")]
     crate::platform::delegate::make_menubar(frame.get_host(), args.is_empty());
     #[cfg(windows)]
