@@ -1697,6 +1697,7 @@ impl Connection {
                 peer_info
             );
             crate::platform::windows_mousemux::request_ids(conn_id, peer_info);
+            crate::platform::windows_mousemux::increment_connected_users();
         }
         #[cfg(any(target_os = "windows", target_os = "linux"))]
         if config::option2bool(
@@ -3800,6 +3801,7 @@ impl Connection {
                 let conn_id = self.inner.id();
                 log::info!("#{} Connection closing, releasing MouseMux IDs", conn_id);
                 crate::platform::windows_mousemux::release_ids(conn_id);
+                crate::platform::windows_mousemux::decrement_connected_users();
             }
         }
         // If voice A,B -> C, and A,B has voice call
