@@ -824,3 +824,8 @@ fn re_request_all_active_connections() {
         request_ids(conn_id, &peer_info);
     }
 }
+
+/// Get the current number of connected users for display in UI
+pub fn get_connected_users_count() -> usize {
+    *CONNECTED_USERS_COUNT.lock().unwrap()
+}
