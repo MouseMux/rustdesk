@@ -429,6 +429,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildHelpCards(String updateUrl) {
+    // MouseMux Edition: No update or install prompts
+    if (bind.isCustomClient()) {
+      return Container();
+    }
     if (!bind.isCustomClient() &&
         updateUrl.isNotEmpty &&
         !isCardClosed &&
