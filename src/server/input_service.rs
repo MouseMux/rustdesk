@@ -445,6 +445,53 @@ lazy_static::lazy_static! {
 }
 static EXITING: AtomicBool = AtomicBool::new(false);
 
+// MouseMux V2.1 integration helper functions
+#[cfg(windows)]
+pub fn sync_mousemux_ids(conn_id: i32) {
+    log::info!(
+        "MouseMux v2.1 protocol: sync_mousemux_ids() called for conn_id {}",
+        conn_id
+    );
+
+    if let Ok(mut enigo) = ENIGO.lock() {
+        // Get IDs for this specific connection
+        let (mouse_id, keyboard_id) = match crate::platform::windows_mousemux::get_ids_for_connection(conn_id) {
+            Some((m, k)) => (Some(m), Some(k)),
+            None => (None, None),
+        };
+
+        log::info!(
+            "MouseMux v2.1 protocol: Retrieved IDs from windows_mousemux for conn_id {}: mouse={:?}, keyboard={:?}",
+            conn_id,
+            mouse_id,
+            keyboard_id
+        );
+
+        // Update main process Enigo instance
+        enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
+        log::info!(
+            "MouseMux v2.1 protocol: Updated MAIN PROCESS Enigo instance for conn_id {}",
+            conn_id
+        );
+
+        // Send IDs to portable service via IPC
+        crate::portable_service::client::send_mousemux_ids(conn_id, mouse_id, keyboard_id);
+    } else {
+        log::error!(
+            "MouseMux v2.1 protocol: Failed to lock ENIGO mutex for conn_id {}",
+            conn_id
+        );
+    }
+}
+
+// Public helper for portable service to update its Enigo instance
+#[cfg(windows)]
+pub fn set_enigo_mousemux_ids(conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+    if let Ok(mut enigo) = ENIGO.lock() {
+        enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
+    }
+}
+
 const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
 // Actual diff of (x,y) is (1,1) here. But 5 may be tolerant.
 const MOUSE_ACTIVE_DISTANCE: i32 = 5;
@@ -993,6 +1040,10 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     let buttons = evt.mask >> 3;
     let evt_type = evt.mask & 0x7;
     let mut en = ENIGO.lock().unwrap();
+
+    // Set current connection ID for MouseMux V2.1
+    #[cfg(windows)]
+    en.set_current_conn_id(Some(conn));
     #[cfg(target_os = "macos")]
     en.set_ignore_flags(enigo_ignore_flags());
     #[cfg(not(target_os = "macos"))]
@@ -1185,19 +1236,19 @@ pub async fn lock_screen() {
 
 #[inline]
 #[cfg(target_os = "linux")]
-pub fn handle_key(evt: &KeyEvent) {
+pub fn handle_key(evt: &KeyEvent, _conn: i32) {
     handle_key_(evt);
 }
 
 #[inline]
 #[cfg(target_os = "windows")]
-pub fn handle_key(evt: &KeyEvent) {
-    crate::portable_service::client::handle_key(evt);
+pub fn handle_key(evt: &KeyEvent, conn: i32) {
+    crate::portable_service::client::handle_key(evt, conn);
 }
 
 #[inline]
 #[cfg(target_os = "macos")]
-pub fn handle_key(evt: &KeyEvent) {
+pub fn handle_key(evt: &KeyEvent, _conn: i32) {
     // having GUI, run main GUI thread, otherwise crash
     let evt = evt.clone();
     QUEUE.exec_async(move || handle_key_(&evt));
