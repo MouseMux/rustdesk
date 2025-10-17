@@ -2793,3 +2793,15 @@ pub mod server_side {
         jboolean::from(crate::server::is_clipboard_service_ok())
     }
 }
+
+pub fn main_get_connected_users_count() -> SyncReturn<i32> {
+    #[cfg(windows)]
+    {
+        use crate::platform::windows_mousemux;
+        SyncReturn(windows_mousemux::get_connected_users_count() as i32)
+    }
+    #[cfg(not(windows))]
+    {
+        SyncReturn(0)
+    }
+}
