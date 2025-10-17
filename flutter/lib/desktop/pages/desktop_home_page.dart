@@ -92,6 +92,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
+      if (!isOutgoingOnly) buildMouseMuxInfo(context),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
@@ -379,6 +380,63 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                     ],
                   ),
                 ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  buildMouseMuxInfo(BuildContext context) {
+    final isOutgoingOnly = bind.isOutgoingOnly();
+    if (isOutgoingOnly) {
+      return Container();
+    }
+
+    return Container(
+      margin: EdgeInsets.only(left: 20.0, right: 16, top: 16.0, bottom: 13),
+      padding: EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Multiple People Can Connect Simultaneously",
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).textTheme.titleLarge?.color,
+            ),
+          ),
+          SizedBox(height: 8.0),
+          Text(
+            "This MouseMux Edition enables multiple users to collaborate in real-time. Each person gets their own mouse cursor and keyboard control.",
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).textTheme.bodySmall?.color,
+              height: 1.4,
+            ),
+          ),
+          SizedBox(height: 10.0),
+          InkWell(
+            onTap: () async {
+              final url = Uri.parse('https://github.com/MouseMux/rustdesk-mousemux');
+              await launchUrl(url);
+            },
+            child: Text(
+              "github.com/MouseMux/rustdesk-mousemux",
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).colorScheme.primary,
+                decoration: TextDecoration.underline,
               ),
             ),
           ),
