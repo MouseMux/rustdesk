@@ -422,7 +422,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           Text(
             "RustDesk, the MouseMux compliant edition.",
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: FontWeight.bold,
               color: Theme.of(context).textTheme.titleLarge?.color,
             ),
@@ -431,7 +431,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           Text(
             userCountText,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 11,
               color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7),
               fontStyle: FontStyle.italic,
             ),
@@ -440,23 +440,25 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           Text(
             "Multiple clients can connect to this host at the same time!",
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 12,
               color: Theme.of(context).textTheme.bodySmall?.color,
               height: 1.4,
             ),
           ),
           SizedBox(height: 10.0),
-          InkWell(
-            onTap: () async {
-              final url = Uri.parse('https://www.mousemux.com/pages/rustdesk');
-              await launchUrl(url);
-            },
-            child: Text(
-              "Click for support info",
-              style: TextStyle(
-                fontSize: 8,
-                color: Theme.of(context).colorScheme.primary,
-                decoration: TextDecoration.underline,
+          Center(
+            child: InkWell(
+              onTap: () async {
+                final url = Uri.parse('https://www.mousemux.com/pages/rustdesk');
+                await launchUrl(url);
+              },
+              child: Text(
+                "Click for support info",
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                ),
               ),
             ),
           ),
