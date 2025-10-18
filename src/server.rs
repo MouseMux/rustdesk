@@ -550,6 +550,13 @@ pub async fn start_server(is_server: bool, no_server: bool) {
     });
 
     if is_server {
+        // Log build information for version tracking
+        log::info!("========================================");
+        log::info!("RustDesk Server Starting");
+        log::info!("Version: {}", env!("CARGO_PKG_VERSION"));
+        log::info!("Build timestamp: {}", env!("BUILD_TIMESTAMP"));
+        log::info!("========================================");
+
         crate::common::set_server_running(true);
         std::thread::spawn(move || {
             if let Err(err) = crate::ipc::start("") {
