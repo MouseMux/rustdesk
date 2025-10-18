@@ -398,7 +398,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     // Use the state variable instead of calling bind directly
     String userCountText;
     if (_connectedUsersCount == 0) {
-      userCountText = "No MouseMux users";
+      userCountText = "Currently 0 MouseMux users";
     } else if (_connectedUsersCount == 1) {
       userCountText = "1 MouseMux user";
     } else {
@@ -422,7 +422,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           Text(
             "RustDesk MouseMux Compliant Edition",
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 8,
               fontWeight: FontWeight.bold,
               color: Theme.of(context).textTheme.titleLarge?.color,
             ),
@@ -431,7 +431,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           Text(
             userCountText,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 8,
               color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7),
               fontStyle: FontStyle.italic,
             ),
@@ -440,7 +440,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           Text(
             "Multiple clients can connect to this host at the same time!",
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 8,
               color: Theme.of(context).textTheme.bodySmall?.color,
               height: 1.4,
             ),
@@ -454,7 +454,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             child: Text(
               "Click for support info",
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 7,
                 color: Theme.of(context).colorScheme.primary,
                 decoration: TextDecoration.underline,
               ),
