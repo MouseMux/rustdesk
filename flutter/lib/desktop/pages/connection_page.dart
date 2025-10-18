@@ -155,21 +155,14 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
 
   _buildConnStatusMsg() {
     widget.onSvcStatusChanged?.call();
-    // MouseMux Edition: Show connected users count
-    final count = bind.mainGetConnectedUsersCount();
-    final statusText = _svcStopped.value
-        ? translate("Service is not running")
-        : stateGlobal.svcStatus.value == SvcStatus.connecting
-            ? translate("connecting_status")
-            : stateGlobal.svcStatus.value == SvcStatus.notReady
-                ? translate("not_ready_status")
-                : (count == 0 
-                    ? "Ready - No users connected"
-                    : count == 1
-                        ? "Ready - 1 user connected"
-                        : "Ready - $count users connected");
     return Text(
-      statusText,
+      _svcStopped.value
+          ? translate("Service is not running")
+          : stateGlobal.svcStatus.value == SvcStatus.connecting
+              ? translate("connecting_status")
+              : stateGlobal.svcStatus.value == SvcStatus.notReady
+                  ? translate("not_ready_status")
+                  : translate('Ready'),
       style: TextStyle(fontSize: em),
     );
   }
