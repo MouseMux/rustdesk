@@ -99,6 +99,19 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    // Log ALL Windows messages received (for debugging mode switching issues)
+    if msg >= WM_APP {
+        log::debug!(
+            "MouseMux window_proc: Received Windows message 0x{:04X} (WM_APP+{}), wparam=0x{:X} ({}), lparam=0x{:X} ({})",
+            msg,
+            msg - WM_APP,
+            wparam,
+            wparam,
+            lparam,
+            lparam
+        );
+    }
+
     match msg {
         MOUSEMUX_STARTUP_BROADCAST => {  // WM_APP+100 - MouseMux startup broadcast
             log::info!("MouseMux v2.1 protocol: Received MOUSEMUX_STARTUP_BROADCAST - MouseMux is available");
@@ -520,6 +533,36 @@ pub fn decrement_connected_users() {
 // ============================================================================
 // MouseMux Protocol V2.1 - Communication Functions
 // ============================================================================
+
+/// Log outgoing Windows message
+fn log_outgoing_message(msg_name: &str, msg_id: u32, hwnd: HWND, wparam: WPARAM, lparam: LPARAM, success: bool) {
+    if success {
+        log::info!(
+            "MouseMux SEND: {} (0x{:04X} / WM_APP+{}) to {:?}, wparam=0x{:X} ({}), lparam=0x{:X} ({}) - SUCCESS",
+            msg_name,
+            msg_id,
+            msg_id - WM_APP,
+            hwnd,
+            wparam,
+            wparam,
+            lparam,
+            lparam
+        );
+    } else {
+        log::error!(
+            "MouseMux SEND: {} (0x{:04X} / WM_APP+{}) to {:?}, wparam=0x{:X} ({}), lparam=0x{:X} ({}) - FAILED: {}",
+            msg_name,
+            msg_id,
+            msg_id - WM_APP,
+            hwnd,
+            wparam,
+            wparam,
+            lparam,
+            lparam,
+            std::io::Error::last_os_error()
+        );
+    }
+}
 
 /// Find MouseMux window
 fn find_mousemux_window() -> Option<HWND> {

@@ -49,6 +49,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   var watchIsCanRecordAudio = false;
   Timer? _updateTimer;
   bool isCardClosed = false;
+  var _connectedUsersCount = 0;
 
   final RxBool _editHover = false.obs;
   final RxBool _block = false.obs;
@@ -394,15 +395,14 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       return Container();
     }
 
-    // Get connected users count
-    final connectedUsers = bind.mainGetConnectedUsersCount();
+    // Use the state variable instead of calling bind directly
     String userCountText;
-    if (connectedUsers == 0) {
+    if (_connectedUsersCount == 0) {
       userCountText = "No MouseMux users";
-    } else if (connectedUsers == 1) {
+    } else if (_connectedUsersCount == 1) {
       userCountText = "1 MouseMux user";
     } else {
-      userCountText = "$connectedUsers MouseMux users";
+      userCountText = "$_connectedUsersCount MouseMux users";
     }
 
     return Container(
@@ -422,7 +422,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           Text(
             "RustDesk MouseMux Compliant Edition",
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: Theme.of(context).textTheme.titleLarge?.color,
             ),
@@ -492,7 +492,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                   child: Text(
                     "MouseMux Compliant Edition",
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6),
                       fontStyle: FontStyle.italic,
                     ),
@@ -798,6 +798,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       final v = await mainGetBoolOption(kOptionStopService);
       if (v != svcStopped.value) {
         svcStopped.value = v;
+        setState(() {});
+      }
+      // Check for connected users count changes
+      final currentCount = bind.mainGetConnectedUsersCount();
+      if (_connectedUsersCount != currentCount) {
+        _connectedUsersCount = currentCount;
         setState(() {});
       }
       if (watchIsCanScreenRecording) {
