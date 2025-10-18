@@ -35,19 +35,45 @@ fi
 echo ""
 echo "[3/4] Build complete!"
 echo ""
-echo "Output location:"
-echo "  flutter/build/windows/x64/runner/Release/rustdesk.exe"
+
+# Show completion time
+echo "========================================"
+echo " Build Completed At:"
+echo "========================================"
+date
 echo ""
 
-# Check if executable exists
+# List all generated executables
+echo "========================================"
+echo " Generated Executables:"
+echo "========================================"
+echo ""
+
+# Main executable
 if [ -f "flutter/build/windows/x64/runner/Release/rustdesk.exe" ]; then
-    SIZE=$(du -h "flutter/build/windows/x64/runner/Release/rustdesk.exe" | cut -f1)
-    echo "Executable size: $SIZE"
+    echo "Main executable:"
+    ls -lh "flutter/build/windows/x64/runner/Release/rustdesk.exe" | awk '{print "  " $9 " - " $5 " - " $6 " " $7 " " $8}'
     echo ""
-    echo "========================================"
-    echo " Build SUCCESS!"
-    echo "========================================"
 else
-    echo "ERROR: rustdesk.exe not found!"
+    echo "ERROR: Main rustdesk.exe not found!"
     exit 1
 fi
+
+# Installer (if it exists)
+INSTALLER=$(ls rustdesk-*-install.exe 2>/dev/null | head -1)
+if [ -n "$INSTALLER" ]; then
+    echo "Installer:"
+    ls -lh "$INSTALLER" | awk '{print "  " $9 " - " $5 " - " $6 " " $7 " " $8}'
+    echo ""
+fi
+
+# Resources executable (if it exists)
+if [ -f "resources/rustdesk.exe" ]; then
+    echo "Resources executable:"
+    ls -lh "resources/rustdesk.exe" | awk '{print "  " $9 " - " $5 " - " $6 " " $7 " " $8}'
+    echo ""
+fi
+
+echo "========================================"
+echo " Build SUCCESS!"
+echo "========================================"

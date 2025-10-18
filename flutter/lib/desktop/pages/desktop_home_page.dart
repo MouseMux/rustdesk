@@ -394,6 +394,17 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       return Container();
     }
 
+    // Get connected users count
+    final connectedUsers = bind.mainGetConnectedUsersCount();
+    String userCountText;
+    if (connectedUsers == 0) {
+      userCountText = "No users connected";
+    } else if (connectedUsers == 1) {
+      userCountText = "1 user connected";
+    } else {
+      userCountText = "$connectedUsers users connected";
+    }
+
     return Container(
       margin: EdgeInsets.only(left: 20.0, right: 16, top: 16.0, bottom: 13),
       padding: EdgeInsets.all(12.0),
@@ -409,16 +420,25 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Multiple People Can Connect Simultaneously",
+            "RustDesk MouseMux Compliant Edition",
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
               color: Theme.of(context).textTheme.titleLarge?.color,
             ),
           ),
+          SizedBox(height: 6.0),
+          Text(
+            userCountText,
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
           SizedBox(height: 8.0),
           Text(
-            "This MouseMux Edition enables multiple users to collaborate in real-time. Each person gets their own mouse cursor and keyboard control.",
+            "Multiple clients can connect to this host at the same time!",
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).textTheme.bodySmall?.color,
@@ -428,11 +448,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           SizedBox(height: 10.0),
           InkWell(
             onTap: () async {
-              final url = Uri.parse('https://github.com/MouseMux/rustdesk-mousemux');
+              final url = Uri.parse('https://www.mousemux.com/pages/rustdesk');
               await launchUrl(url);
             },
             child: Text(
-              "github.com/MouseMux/rustdesk-mousemux",
+              "Click for support info",
               style: TextStyle(
                 fontSize: 10,
                 color: Theme.of(context).colorScheme.primary,
