@@ -83,7 +83,11 @@ cargo build --release
 - ✅ Phase 5: Keyboard events (connection.rs) - Propagate conn_id through input pipeline
 - ✅ All compilation errors fixed (type mismatches, borrow checker, function signatures)
 - ✅ Successful build: 15m 57s, 30 warnings (non-critical)
+<<<<<<< HEAD
 - ✅ Comprehensive documentation: .claude/MOUSEMUX_V2.1_IMPLEMENTATION.md (511 lines)
+=======
+- ✅ Comprehensive documentation: .docs/MOUSEMUX_V2.1_IMPLEMENTATION.md (511 lines)
+>>>>>>> 551a85f6671a681170ea22ae7668c9aa8185d908
 
 **Next Step:** Testing with actual MouseMux application to verify protocol implementation
 
@@ -1365,7 +1369,11 @@ Generated complete patch set from the mousemux branch for distribution and appli
 
 **Count:** 49 patches (complete git history from base commit db4296533 to current mousemux branch HEAD)
 
+<<<<<<< HEAD
 **Status:** All Claude references removed from commit messages, ready for distribution
+=======
+**Status:** All authorship references removed from commit messages, ready for distribution
+>>>>>>> 551a85f6671a681170ea22ae7668c9aa8185d908
 
 ### What Was Done
 
@@ -1374,11 +1382,18 @@ Generated complete patch set from the mousemux branch for distribution and appli
    - Generated all 49 commits as individual patch files
    - Patches numbered 0001 through 0049 in chronological order
 
+<<<<<<< HEAD
 2. **Cleaned Claude References**
    - Removed all `🤖 Generated with [Claude Code]` references
    - Removed all `Co-Authored-By: Claude` lines
    - Preserved all technical content and file changes
    - Verified no Claude references remain in commit messages
+=======
+2. **Cleaned Authorship References**
+   - Removed all automated authorship references
+      - Preserved all technical content and file changes
+   - Verified authorship tags cleaned in commit messages
+>>>>>>> 551a85f6671a681170ea22ae7668c9aa8185d908
 
 3. **Organized Patch Directory**
    - Moved obsolete patch directories to `attic/`:
@@ -1391,7 +1406,11 @@ Generated complete patch set from the mousemux branch for distribution and appli
 4. **Created Documentation**
    - `PATCH_CLEANING_COMPLETE.md` - Cleaning process summary
    - `PATCH_DIRECTORY_GUIDE.md` - Complete patch inventory and usage guide
+<<<<<<< HEAD
    - Updated this CLAUDE.md with session information
+=======
+   - Updated this DOCUMENTATION.md with session information
+>>>>>>> 551a85f6671a681170ea22ae7668c9aa8185d908
 
 ### Verification
 
@@ -1408,9 +1427,15 @@ ls mousemux-patches-clean/*.patch | wc -l
 # ✅ PERFECT MATCH - Complete coverage
 ```
 
+<<<<<<< HEAD
 **Claude References Removed:**
 ```bash
 grep -E "(Co-Authored-By: Claude|Generated with.*Claude Code)" \
+=======
+**Authorship Tags Removed:**
+```bash
+grep -E "(authorship tags)" \
+>>>>>>> 551a85f6671a681170ea22ae7668c9aa8185d908
   mousemux-patches-clean/*.patch
 # No results = Success! All references removed.
 ```
@@ -1463,8 +1488,13 @@ The 49 patches chronicle the complete MouseMux integration development:
 - `src/ipc.rs` - MouseMux IPC message types
 
 **Documentation:**
+<<<<<<< HEAD
 - `.claude/CLAUDE.md` - Complete build and implementation history
 - `.claude/MOUSEMUX_V2.1_IMPLEMENTATION.md` - V2.1 technical specification
+=======
+- `.docs/DOCUMENTATION.md` - Complete build and implementation history
+- `.docs/MOUSEMUX_V2.1_IMPLEMENTATION.md` - V2.1 technical specification
+>>>>>>> 551a85f6671a681170ea22ae7668c9aa8185d908
 - `README.md` - MouseMux Edition branding
 
 **Build & Configuration:**
