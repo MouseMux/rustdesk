@@ -33,7 +33,10 @@ const MOUSEMUX_RELEASE_CONNECTION: u32 = WM_APP + 60;    // Release connection a
 const MOUSEMUX_STARTUP_BROADCAST: u32 = WM_APP + 100;    // MouseMux startup broadcast - re-register
 const MOUSEMUX_MOUSE_ID_ASSIGNED: u32 = WM_APP + 110;    // Mouse ID assigned (conn_id + mouse_id)
 const MOUSEMUX_KEYBOARD_ID_ASSIGNED: u32 = WM_APP + 120; // Keyboard ID assigned (conn_id + keyboard_id)
+const MOUSEMUX_USER_ADD: u32 = WM_APP + 160;             // User added to MouseMux (user_id + total_count)
+const MOUSEMUX_USER_REMOVE: u32 = WM_APP + 170;          // User removed from MouseMux (user_id + total_count)
 const MOUSEMUX_REQUEST_EXIT: u32 = WM_APP + 200;         // MouseMux requests RustDesk to exit
+const MOUSEMUX_EXITING: u32 = WM_APP + 210;              // MouseMux is exiting (reset user count)
 
 // Protocol version and RustDesk version
 const PROTOCOL_VERSION: u32 = 121;  // V2.1 = 121
@@ -191,9 +194,66 @@ unsafe extern "system" fn window_proc(
                 conn_id
             );
             crate::server::input_service::sync_mousemux_ids(conn_id);
+            0
+        }
 
-            // User is now fully connected (has both mouse and keyboard IDs)
+        MOUSEMUX_USER_ADD => {  // WM_APP+160 - User added to MouseMux
+            let user_id = wparam as i32;
+            let mousemux_total = lparam as usize;
+
+            log::info!(
+                "MouseMux v2.1 protocol: MOUSEMUX_USER_ADD - User {} added, MouseMux total: {}",
+                user_id,
+                mousemux_total
+            );
+
             increment_connected_users();
+
+            // Verify count matches MouseMux
+            let our_count = get_connected_users_count();
+            if our_count != mousemux_total {
+                log::warn!(
+                    "MouseMux v2.1 protocol: User count mismatch after ADD - RustDesk: {}, MouseMux: {}",
+                    our_count,
+                    mousemux_total
+                );
+            }
+            0
+        }
+
+        MOUSEMUX_USER_REMOVE => {  // WM_APP+170 - User removed from MouseMux
+            let user_id = wparam as i32;
+            let mousemux_total = lparam as usize;
+
+            log::info!(
+                "MouseMux v2.1 protocol: MOUSEMUX_USER_REMOVE - User {} removed, MouseMux total: {}",
+                user_id,
+                mousemux_total
+            );
+
+            decrement_connected_users();
+
+            // Verify count matches MouseMux
+            let our_count = get_connected_users_count();
+            if our_count != mousemux_total {
+                log::warn!(
+                    "MouseMux v2.1 protocol: User count mismatch after REMOVE - RustDesk: {}, MouseMux: {}",
+                    our_count,
+                    mousemux_total
+                );
+            }
+            0
+        }
+
+        MOUSEMUX_EXITING => {  // WM_APP+210 - MouseMux is exiting
+            log::info!("MouseMux v2.1 protocol: MOUSEMUX_EXITING - MouseMux is shutting down, resetting user count");
+
+            // Reset user count to 0 as safety measure
+            {
+                let mut count = CONNECTED_USERS_COUNT.lock().unwrap();
+                *count = 0;
+            }
+            update_main_window_title();
             0
         }
 
@@ -756,9 +816,6 @@ pub fn release_ids(conn_id: i32) -> bool {
 
     // Clear IDs from local state FIRST
     clear_ids_for_connection(conn_id);
-
-    // User is disconnecting - decrement count
-    decrement_connected_users();
 
     // Also remove from pending_peer_info
     MOUSEMUX_STATE.lock().unwrap().pending_peer_info.remove(&conn_id);

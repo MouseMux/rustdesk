@@ -398,11 +398,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     final connectedUsers = bind.mainGetConnectedUsersCount();
     String userCountText;
     if (connectedUsers == 0) {
-      userCountText = "No users connected";
+      userCountText = "No MouseMux users";
     } else if (connectedUsers == 1) {
-      userCountText = "1 user connected";
+      userCountText = "1 MouseMux user";
     } else {
-      userCountText = "$connectedUsers users connected";
+      userCountText = "$connectedUsers MouseMux users";
     }
 
     return Container(
