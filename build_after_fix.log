@@ -1,0 +1,374 @@
+========================================
+ MouseMux Flutter Edition - Build Script
+========================================
+
+[1/4] Generating Flutter-Rust bridge files...
+2025/10/17 20:42:31 [WARN] Skipping unresolvable module inline (tried \\?\O:\RustDesk-build\rustdesk-flutter\src\inline.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\inline\mod.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\ui\inline.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\ui\inline\mod.rs, )
+2025/10/17 20:42:31 [WARN] Skipping unresolvable module io (tried \\?\O:\RustDesk-build\rustdesk-flutter\src\io.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\io\mod.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\bridge_generated\io.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\bridge_generated\io\mod.rs, )
+2025/10/17 20:42:32 [INFO] Phase: Validate config(s)
+2025/10/17 20:42:32 [INFO] Picked config: Opts { rust_input_path: "O:\\rustdesk-build\\rustdesk-flutter\\./src/flutter_ffi.rs", dart_output_path: "O:\\rustdesk-build\\rustdesk-flutter\\./flutter/lib/generated_bridge.dart", dart_decl_output_path: None, c_output_path: ["O:\\rustdesk-build\\rustdesk-flutter\\./flutter/macos/Runner/bridge_generated.h"], rust_crate_dir: "O:\\rustdesk-build\\rustdesk-flutter", rust_output_path: "O:\\rustdesk-build\\rustdesk-flutter\\./src\\bridge_generated.rs", class_name: "Rustdesk", dart_format_line_length: 80, dart_enums_style: false, skip_add_mod_to_lib: false, llvm_path: ["/opt/homebrew/opt/llvm", "/usr/local/opt/llvm", "/usr/lib/llvm-9", "/usr/lib/llvm-10", "/usr/lib/llvm-11", "/usr/lib/llvm-12", "/usr/lib/llvm-13", "/usr/lib/llvm-14", "/usr/lib/", "/usr/lib64/", "C:/Program Files/llvm", "C:/msys64/mingw64"], llvm_compiler_opts: "", manifest_path: "O:\\rustdesk-build\\rustdesk-flutter\\Cargo.toml", dart_root: Some("O:\\rustdesk-build\\rustdesk-flutter\\./flutter"), build_runner: true, block_index: BlockIndex(0), skip_deps_check: false, wasm_enabled: false, inline_rust: false, bridge_in_method: true, extra_headers: "", dart3: true, keep_going: false }
+2025/10/17 20:42:32 [INFO] Phase: Parse source code to AST, then to IR
+2025/10/17 20:42:37 [WARN] Skipping unresolvable module inline (tried \\?\O:\RustDesk-build\rustdesk-flutter\src\inline.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\inline\mod.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\ui\inline.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\ui\inline\mod.rs, )
+2025/10/17 20:42:37 [WARN] Skipping unresolvable module io (tried \\?\O:\RustDesk-build\rustdesk-flutter\src\io.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\io\mod.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\bridge_generated\io.rs, \\?\O:\RustDesk-build\rustdesk-flutter\src\bridge_generated\io\mod.rs, )
+2025/10/17 20:42:38 [INFO] Phase: Transform IR
+2025/10/17 20:42:38 [INFO] Phase: Generate Rust code
+2025/10/17 20:42:38 [INFO] Phase: Generate Dart code
+Flutter 3.24.5 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision dec2ee5c1f (11 months ago) • 2024-11-13 11:13:06 -0800
+Engine • revision a18df97ca5
+Tools • Dart 3.5.4 • DevTools 2.37.3
+2025/10/17 20:42:41 [INFO] Phase: Generating Dart bindings for Rust
+Running in Directory: 'O:\RustDesk-build\rustdesk-flutter\flutter'
+Input Headers: [C:\Users\DEVELO~1\AppData\Local\Temp\.tmpPxUHZM.h]
+[WARNING]: No definition found for declaration - (Cursor) spelling: _Dart_Handle, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct _Dart_Handle, usr: c:@S@_Dart_Handle
+[WARNING]: No definition found for declaration - (Cursor) spelling: _Dart_Handle, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct _Dart_Handle, usr: c:@S@_Dart_Handle
+[WARNING]: No definition found for declaration - (Cursor) spelling: DartCObject, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct DartCObject, usr: c:@S@DartCObject
+[WARNING]: No definition found for declaration - (Cursor) spelling: DartCObject, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct DartCObject, usr: c:@S@DartCObject
+[WARNING]: No definition found for declaration - (Cursor) spelling: _Dart_Handle, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct _Dart_Handle, usr: c:@S@_Dart_Handle
+[WARNING]: No definition found for declaration - (Cursor) spelling: _Dart_Handle, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct _Dart_Handle, usr: c:@S@_Dart_Handle
+[WARNING]: No definition found for declaration - (Cursor) spelling: _Dart_Handle, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct _Dart_Handle, usr: c:@S@_Dart_Handle
+[WARNING]: No definition found for declaration - (Cursor) spelling: _Dart_Handle, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct _Dart_Handle, usr: c:@S@_Dart_Handle
+[WARNING]: No definition found for declaration - (Cursor) spelling: DartCObject, kind: 2, kindSpelling: StructDecl, type: 105, typeSpelling: struct DartCObject, usr: c:@S@DartCObject
+[WARNING]: Generated declaration '_Dart_Handle' start's with '_' and therefore will be private.
+Finished, Bindings generated in C:\Users\DEVELO~1\AppData\Local\Temp\.tmp5EqzU4
+the path is "O:\\rustdesk-build\\rustdesk-flutter\\./flutter/macos/Runner/bridge_generated.h"
+2025/10/17 20:42:54 [INFO] Phase: Running build_runner
+2025/10/17 20:42:54 [INFO] Running build_runner at O:\rustdesk-build\rustdesk-flutter\./flutter
+[INFO] Generating build script...
+[INFO] Generating build script completed, took 1.5s
+
+[INFO] Initializing inputs
+[INFO] Reading cached asset graph...
+[INFO] Reading cached asset graph completed, took 375ms
+
+[INFO] Checking for updates since last build...
+[INFO] Checking for updates since last build completed, took 4.9s
+
+[INFO] Running build...
+[INFO] Running build completed, took 50ms
+
+[INFO] Caching finalized dependency graph...
+[INFO] Caching finalized dependency graph completed, took 253ms
+
+[INFO] Succeeded after 327ms with 0 outputs (0 actions)
+
+2025/10/17 20:43:15 [INFO] Phase: Formatting Dart code
+Formatted O:\\rustdesk-build\\rustdesk-flutter\\./flutter/lib/generated_bridge.dart
+Formatted 2 files (1 changed) in 2.46 seconds.
+2025/10/17 20:43:19 [INFO] Success!
+2025/10/17 20:43:19 [INFO] Now go and use it :)
+
+[2/4] Building Flutter application...
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:251:17
+    |
+251 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:283:17
+    |
+283 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+
+warning: `hbb_common` (lib) generated 2 warnings
+    Finished release [optimized] target(s) in 2.88s
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:251:17
+    |
+251 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:283:17
+    |
+283 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+
+warning: `hbb_common` (lib) generated 2 warnings
+warning: `hbb_common` (lib) generated 2 warnings (2 duplicates)
+warning: unused import: `DWORD_PTR`
+ --> libs\enigo\src\win\win_impl.rs:2:49
+  |
+2 | use self::winapi::shared::{basetsd::{ULONG_PTR, DWORD_PTR}, minwindef::*, windef::*};
+  |                                                 ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `enigo` (lib) generated 1 warning (run `cargo fix --lib -p enigo` to apply 1 suggestion)
+warning: unused import: `self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE`
+   --> O:\RustDesk-build\rustdesk-flutter\target\release\build\scrap-7c0d683ab5329de6\out/vpx_ffi.rs:911:9
+    |
+911 | pub use self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: `scrap` (lib) generated 1 warning (run `cargo fix --lib -p scrap` to apply 1 suggestion)
+   Compiling rustdesk v1.4.2-mousemux-v2.1 (O:\RustDesk-build\rustdesk-flutter)
+warning: the item `System` is imported redundantly
+    --> src\platform\windows.rs:3106:9
+     |
+17   |     sysinfo::{Pid, System},
+     |                    ------ the item `System` is already imported here
+...
+3106 |     use hbb_common::sysinfo::System;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused imports: `HWND_MESSAGE`, `WS_OVERLAPPEDWINDOW`
+  --> src\platform\windows_mousemux.rs:17:9
+   |
+17 |         HWND_MESSAGE, MSG, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, CS_HREDRAW, CS_VREDRAW,
+   |         ^^^^^^^^^^^^                    ^^^^^^^^^^^^^^^^^^^
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1788:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1788 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1812:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1812 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `MOUSE_BUTTON_LEFT`, `MOUSE_TYPE_DOWN`, `MOUSE_TYPE_UP`, `MOUSE_TYPE_WHEEL`
+ --> src\ui_session_interface.rs:3:13
+  |
+3 |     input::{MOUSE_BUTTON_LEFT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP, MOUSE_TYPE_WHEEL},
+  |             ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: use of deprecated function `hbb_common::base64::encode`: Use Engine::encode
+   --> src\hbbs_http\sync.rs:163:52
+    |
+163 |                         hash = hbb_common::base64::encode(&res[..]);
+    |                                                    ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: value assigned to `event_num_enabled` is never read
+   --> src\server\input_service.rs:205:17
+    |
+205 |         let mut event_num_enabled = false;
+    |                 ^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` on by default
+
+warning: variable does not need to be mutable
+  --> src\tray.rs:60:9
+   |
+60 |     let mut event_loop = EventLoopBuilder::new().build();
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+warning: type `SendSyncHwnd` is more private than the item `MouseMuxState::hwnd`
+  --> src\platform\windows_mousemux.rs:70:5
+   |
+70 |     pub hwnd: Option<SendSyncHwnd>,  // RustDesk's message window handle
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `MouseMuxState::hwnd` is reachable at visibility `pub`
+   |
+note: but type `SendSyncHwnd` is only usable at visibility `pub(self)`
+  --> src\platform\windows_mousemux.rs:55:1
+   |
+55 | struct SendSyncHwnd(HWND);
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: fields `x` and `y` are never read
+   --> src\server\input_service.rs:103:5
+    |
+100 | struct Input {
+    |        ----- fields in this struct
+...
+103 |     x: i32,
+    |     ^
+104 |     y: i32,
+    |     ^
+    |
+    = note: `Input` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` on by default
+
+warning: constant `MOUSE_MOVE_PROTECTION_TIMEOUT` is never used
+   --> src\server\input_service.rs:495:7
+    |
+495 | const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MOUSE_ACTIVE_DISTANCE` is never used
+   --> src\server\input_service.rs:497:7
+    |
+497 | const MOUSE_ACTIVE_DISTANCE: i32 = 5;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_last_input_cursor_pos` is never used
+   --> src\server\input_service.rs:938:4
+    |
+938 | fn get_last_input_cursor_pos() -> (i32, i32) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_mousemux_enabled` is never used
+    --> src\ui_interface.rs:1533:8
+     |
+1533 | pub fn get_mousemux_enabled() -> String {
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `set_mousemux_enabled` is never used
+    --> src\ui_interface.rs:1543:8
+     |
+1543 | pub fn set_mousemux_enabled(_enabled: String) {
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: `rustdesk` (lib) generated 15 warnings (run `cargo fix --lib -p rustdesk` to apply 3 suggestions)
+    Finished release [optimized] target(s) in 9m 15s
+
+Building Windows application...                                    29.7s
+√ Built build\windows\x64\runner\Release\rustdesk.exe
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: brotli in c:\users\developer\appdata\roaming\python\python313\site-packages (from -r requirements.txt (line 1)) (1.1.0)
+   Compiling serde v1.0.203
+   Compiling winapi v0.3.9
+   Compiling winapi-build v0.1.1
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling option-ext v0.2.0
+   Compiling lazy_static v1.5.0
+   Compiling windows_x86_64_msvc v0.48.5
+   Compiling windows-targets v0.48.5
+   Compiling bitflags v1.3.2
+   Compiling windows-sys v0.48.0
+   Compiling alloc-stdlib v0.2.2
+   Compiling md5 v0.7.0
+   Compiling native-windows-gui v1.0.13
+   Compiling brotli-decompressor v2.5.1
+   Compiling brotli v3.5.0
+   Compiling dirs-sys v0.4.1
+   Compiling dirs v5.0.1
+   Compiling toml v0.5.11
+   Compiling winres v0.1.12
+   Compiling rustdesk-portable-packer v1.4.2 (O:\RustDesk-build\rustdesk-flutter\libs\portable)
+    Finished release [optimized] target(s) in 1m 32s
+Executable path: .\rustdesk.exe
+Compression level: 11
+Processing .\desktop_drop_plugin.dll...
+Processing .\desktop_multi_window_plugin.dll...
+Processing .\dylib_virtual_display.dll...
+Processing .\file_selector_windows_plugin.dll...
+Processing .\flutter_custom_cursor_plugin.dll...
+Processing .\flutter_gpu_texture_renderer_plugin.dll...
+Processing .\flutter_windows.dll...
+Processing .\librustdesk.dll...
+Processing .\rustdesk.exe...
+Processing .\screen_retriever_plugin.dll...
+Processing .\texture_rgba_renderer_plugin.dll...
+Processing .\uni_links_desktop_plugin.dll...
+Processing .\url_launcher_windows_plugin.dll...
+Processing .\window_manager_plugin.dll...
+Processing .\window_size_plugin.dll...
+Processing .\data\app.so...
+Processing .\data\icudtl.dat...
+Processing .\data\flutter_assets\AssetManifest.bin...
+Processing .\data\flutter_assets\AssetManifest.json...
+Processing .\data\flutter_assets\FontManifest.json...
+Processing .\data\flutter_assets\NOTICES.Z...
+Processing .\data\flutter_assets\assets\actions.svg...
+Processing .\data\flutter_assets\assets\actions_mobile.svg...
+Processing .\data\flutter_assets\assets\address_book.ttf...
+Processing .\data\flutter_assets\assets\android.svg...
+Processing .\data\flutter_assets\assets\arrow.svg...
+Processing .\data\flutter_assets\assets\auth-apple.svg...
+Processing .\data\flutter_assets\assets\auth-auth0.svg...
+Processing .\data\flutter_assets\assets\auth-azure.svg...
+Processing .\data\flutter_assets\assets\auth-default.svg...
+Processing .\data\flutter_assets\assets\auth-facebook.svg...
+Processing .\data\flutter_assets\assets\auth-github.svg...
+Processing .\data\flutter_assets\assets\auth-gitlab.svg...
+Processing .\data\flutter_assets\assets\auth-google.svg...
+Processing .\data\flutter_assets\assets\auth-okta.svg...
+Processing .\data\flutter_assets\assets\call_end.svg...
+Processing .\data\flutter_assets\assets\call_wait.svg...
+Processing .\data\flutter_assets\assets\chat.svg...
+Processing .\data\flutter_assets\assets\chat2.svg...
+Processing .\data\flutter_assets\assets\checkbox-outline.svg...
+Processing .\data\flutter_assets\assets\chevron_up_chevron_down.svg...
+Processing .\data\flutter_assets\assets\close.svg...
+Processing .\data\flutter_assets\assets\device_group.ttf...
+Processing .\data\flutter_assets\assets\display.svg...
+Processing .\data\flutter_assets\assets\dots.svg...
+Processing .\data\flutter_assets\assets\file.svg...
+Processing .\data\flutter_assets\assets\file_transfer.svg...
+Processing .\data\flutter_assets\assets\folder.svg...
+Processing .\data\flutter_assets\assets\folder_new.svg...
+Processing .\data\flutter_assets\assets\fullscreen.svg...
+Processing .\data\flutter_assets\assets\fullscreen_exit.svg...
+Processing .\data\flutter_assets\assets\gestures.ttf...
+Processing .\data\flutter_assets\assets\home.svg...
+Processing .\data\flutter_assets\assets\icon.svg...
+Processing .\data\flutter_assets\assets\insecure.svg...
+Processing .\data\flutter_assets\assets\insecure_relay.svg...
+Processing .\data\flutter_assets\assets\kb_layout_iso.svg...
+Processing .\data\flutter_assets\assets\kb_layout_not_iso.svg...
+Processing .\data\flutter_assets\assets\keyboard.svg...
+Processing .\data\flutter_assets\assets\linux.svg...
+Processing .\data\flutter_assets\assets\mac.svg...
+Processing .\data\flutter_assets\assets\message_24dp_5F6368.svg...
+Processing .\data\flutter_assets\assets\more.ttf...
+Processing .\data\flutter_assets\assets\peer_searchbar.ttf...
+Processing .\data\flutter_assets\assets\pinned.svg...
+Processing .\data\flutter_assets\assets\rec.svg...
+Processing .\data\flutter_assets\assets\record_screen.svg...
+Processing .\data\flutter_assets\assets\refresh.svg...
+Processing .\data\flutter_assets\assets\scam.png...
+Processing .\data\flutter_assets\assets\screen.svg...
+Processing .\data\flutter_assets\assets\search.svg...
+Processing .\data\flutter_assets\assets\secure.svg...
+Processing .\data\flutter_assets\assets\secure_relay.svg...
+Processing .\data\flutter_assets\assets\tabbar.ttf...
+Processing .\data\flutter_assets\assets\transfer.svg...
+Processing .\data\flutter_assets\assets\trash.svg...
+Processing .\data\flutter_assets\assets\unpinned.svg...
+Processing .\data\flutter_assets\assets\voice_call.svg...
+Processing .\data\flutter_assets\assets\voice_call_waiting.svg...
+Processing .\data\flutter_assets\assets\win.svg...
+Processing .\data\flutter_assets\fonts\MaterialIcons-Regular.otf...
+Processing .\data\flutter_assets\packages\dash_chat_2\assets\placeholder.png...
+Processing .\data\flutter_assets\packages\dash_chat_2\assets\profile_placeholder.png...
+Processing .\data\flutter_assets\packages\flex_color_picker\assets\opacity.png...
+Processing .\data\flutter_assets\packages\wakelock_plus\assets\no_sleep.js...
+Processing .\data\flutter_assets\packages\window_manager\images\ic_chrome_close.png...
+Processing .\data\flutter_assets\packages\window_manager\images\ic_chrome_maximize.png...
+Processing .\data\flutter_assets\packages\window_manager\images\ic_chrome_minimize.png...
+Processing .\data\flutter_assets\packages\window_manager\images\ic_chrome_unmaximize.png...
+Processing .\data\flutter_assets\shaders\ink_sparkle.frag...
+Metadata has been written to O:\RustDesk-build\rustdesk-flutter\libs\portable\data.bin
+App metadata has been written to O:\RustDesk-build\rustdesk-flutter\libs\portable\app_metadata.toml
+features: ['flutter']
+False
+output location: O:\rustdesk-build\rustdesk-flutter/rustdesk_portable.exe
+output location: O:\rustdesk-build\rustdesk-flutter/rustdesk-1.4.2-mousemux-v2.1-install.exe
+
+[3/4] Build complete!
+
+Output location:
+  flutter/build/windows/x64/runner/Release/rustdesk.exe
+
+Executable size: 264K
+
+========================================
+ Build SUCCESS!
+========================================

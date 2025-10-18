@@ -486,21 +486,15 @@ pub fn set_main_window_hwnd(hwnd: HWND) {
     log::info!("MouseMux: Main window HWND set to {:?}", hwnd);
 }
 
-/// Update the main window title with connected user count
+/// Update the main window title (no user count displayed here anymore)
 fn update_main_window_title() {
-    let count = *CONNECTED_USERS_COUNT.lock().unwrap();
     let hwnd = *MAIN_WINDOW_HWND.lock().unwrap();
 
     if let Some(SendSyncHwnd(hwnd)) = hwnd {
         unsafe {
-            let title = if count == 0 {
-                CString::new("RustDesk (MouseMux compliant edition)").unwrap()
-            } else {
-                CString::new(format!("RustDesk (MouseMux compliant edition, {} users connected)", count)).unwrap()
-            };
-
+            let title = CString::new("RustDesk (MouseMux compliant edition)").unwrap();
             SetWindowTextA(hwnd, title.as_ptr());
-            log::info!("MouseMux: Updated window title - {} users connected", count);
+            log::info!("MouseMux: Window title set to default (user count displayed in UI only)");
         }
     }
 }
