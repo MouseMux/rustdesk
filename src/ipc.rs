@@ -183,6 +183,7 @@ pub enum DataPortableService {
     RequestStart,
     WillClose,
     CmShowElevation(bool),
+    MouseMuxIds(i32, Option<u32>, Option<u32>), // (conn_id, mouse_id, keyboard_id)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

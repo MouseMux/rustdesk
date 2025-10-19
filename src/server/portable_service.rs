@@ -235,6 +235,10 @@ pub mod server {
     }
 
     pub fn run_portable_service() {
+        // MouseMux V2: No initialization needed here
+        // The main process handles all MouseMux communication via the message window
+        // This elevated process just uses the IDs that are synced to the Enigo instance
+
         let shmem = match SharedMemory::open_existing(SHMEM_NAME) {
             Ok(shmem) => Arc::new(shmem),
             Err(e) => {
@@ -491,6 +495,20 @@ pub mod server {
                                             crate::input_service::handle_key_(&evt);
                                         }
                                     }
+                                    MouseMuxIds(conn_id, mouse_id, keyboard_id) => {
+                                        log::info!(
+                                            "MouseMux v2.1 protocol: PORTABLE SERVICE received IPC message for conn_id {}: mouse={:?}, keyboard={:?}",
+                                            conn_id,
+                                            mouse_id,
+                                            keyboard_id
+                                        );
+                                        // Update the portable service's ENIGO instance
+                                        crate::input_service::set_enigo_mousemux_ids(conn_id, mouse_id, keyboard_id);
+                                        log::info!(
+                                            "MouseMux v2.1 protocol: PORTABLE SERVICE updated Enigo instance for conn_id {}",
+                                            conn_id
+                                        );
+                                    }
                                     _ => {}
                                 },
                                 _ => {}
@@ -538,6 +556,7 @@ pub mod client {
 
     pub(crate) fn start_portable_service(para: StartPara) -> ResultType<()> {
         log::info!("start portable service");
+
         if RUNNING.lock().unwrap().clone() {
             bail!("already running");
         }
@@ -945,7 +964,7 @@ pub mod client {
         }
     }
 
-    pub fn handle_key(evt: &KeyEvent) {
+    pub fn handle_key(evt: &KeyEvent, _conn: i32) {
         if RUNNING.lock().unwrap().clone() {
             handle_key_(evt).ok();
         } else {
@@ -955,6 +974,34 @@ pub mod client {
 
     pub fn running() -> bool {
         RUNNING.lock().unwrap().clone()
+    }
+
+    // rustdesk: Send IDs to portable service
+    pub fn send_mousemux_ids(conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+        let running = RUNNING.lock().unwrap().clone();
+        log::info!(
+            "MouseMux v2.1 protocol: MAIN PROCESS sending IDs to portable service: conn_id={}, mouse={:?}, keyboard={:?}, portable_service_running={}",
+            conn_id,
+            mouse_id,
+            keyboard_id,
+            running
+        );
+
+        // Always send via IPC - messages will be queued if portable service not connected yet
+        // This fixes the race condition where IDs arrive before portable service connects
+        if let Err(e) = ipc_send(Data::DataPortableService(DataPortableService::MouseMuxIds(
+            conn_id, mouse_id, keyboard_id,
+        ))) {
+            log::warn!(
+                "MouseMux v2.1 protocol: Failed to send IDs via IPC (portable service may not be running yet): {}",
+                e
+            );
+        } else {
+            log::info!(
+                "MouseMux v2.1 protocol: IPC message sent successfully for conn_id {}",
+                conn_id
+            );
+        }
     }
 }
 

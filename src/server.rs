@@ -550,6 +550,13 @@ pub async fn start_server(is_server: bool, no_server: bool) {
     });
 
     if is_server {
+        // Log build information for version tracking
+        log::info!("========================================");
+        log::info!("RustDesk Server Starting");
+        log::info!("Version: {}", env!("CARGO_PKG_VERSION"));
+        log::info!("Build timestamp: {}", env!("BUILD_TIMESTAMP"));
+        log::info!("========================================");
+
         crate::common::set_server_running(true);
         std::thread::spawn(move || {
             if let Err(err) = crate::ipc::start("") {
@@ -562,6 +569,16 @@ pub async fn start_server(is_server: bool, no_server: bool) {
             }
         });
         input_service::fix_key_down_timeout_loop();
+        #[cfg(windows)]
+        {
+            // Initialize MouseMux V2 protocol
+            if let Err(e) = crate::platform::windows_mousemux::init_mousemux_window() {
+                log::warn!("Failed to initialize MouseMux V2 window: {}", e);
+            } else {
+                // Send startup notification to MouseMux (V2.1)
+                crate::platform::windows_mousemux::notify_startup();
+            }
+        }
         #[cfg(target_os = "linux")]
         if input_service::wayland_use_uinput() {
             allow_err!(input_service::setup_uinput(0, 1920, 0, 1080).await);
