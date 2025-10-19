@@ -417,44 +417,37 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                "RustDesk",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.titleLarge?.color,
-                ),
-              ),
-              SizedBox(height: 2.0),
-              Text(
-                "MouseMux Edition",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                  color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.85),
-                ),
-              ),
-            ],
+          Text(
+            "RustDesk",
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-          SizedBox(height: 6.0),
+          SizedBox(height: 4.0),
+          Text(
+            "MouseMux compliant Edition",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+              color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.85),
+            ),
+          ),
+          SizedBox(height: 16.0),
           Text(
             userCountText,
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,
               color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7),
               fontStyle: FontStyle.italic,
             ),
           ),
-          SizedBox(height: 8.0),
+          SizedBox(height: 16.0),
           Text(
             "Multiple clients can connect to this host at the same time!",
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).textTheme.bodySmall?.color,
@@ -462,19 +455,18 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             ),
           ),
           SizedBox(height: 10.0),
-          Center(
-            child: InkWell(
-              onTap: () async {
-                final url = Uri.parse('https://www.mousemux.com/pages/rustdesk');
-                await launchUrl(url);
-              },
-              child: Text(
-                "Click for support info",
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Theme.of(context).colorScheme.primary,
-                  decoration: TextDecoration.underline,
-                ),
+          InkWell(
+            onTap: () async {
+              final url = Uri.parse('https://www.mousemux.com/pages/rustdesk');
+              await launchUrl(url);
+            },
+            child: Text(
+              "Click for support info",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).colorScheme.primary,
+                decoration: TextDecoration.underline,
               ),
             ),
           ),
