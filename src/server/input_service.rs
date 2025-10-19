@@ -454,11 +454,8 @@ pub fn sync_mousemux_ids(conn_id: i32) {
     );
 
     if let Ok(mut enigo) = ENIGO.lock() {
-        // Get IDs for this specific connection
-        let (mouse_id, keyboard_id) = match crate::platform::windows_mousemux::get_ids_for_connection(conn_id) {
-            Some((m, k)) => (Some(m), Some(k)),
-            None => (None, None),
-        };
+        // Get IDs for this specific connection (returns separate Options)
+        let (mouse_id, keyboard_id) = crate::platform::windows_mousemux::get_ids_for_connection(conn_id);
 
         log::info!(
             "MouseMux v2.1 protocol: Retrieved IDs from windows_mousemux for conn_id {}: mouse={:?}, keyboard={:?}",

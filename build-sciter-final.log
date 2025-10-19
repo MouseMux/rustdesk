@@ -1,0 +1,746 @@
+   Compiling proc-macro2 v1.0.93
+   Compiling unicode-ident v1.0.12
+   Compiling windows_x86_64_msvc v0.52.5
+   Compiling autocfg v1.3.0
+   Compiling cfg-if v1.0.0
+   Compiling shlex v1.3.0
+   Compiling jobserver v0.1.31
+   Compiling serde v1.0.203
+   Compiling winapi v0.3.9
+   Compiling memchr v2.7.4
+   Compiling cc v1.2.13
+   Compiling lock_api v0.4.12
+   Compiling libc v0.2.171
+   Compiling windows-targets v0.52.5
+   Compiling crossbeam-utils v0.8.20
+   Compiling windows-sys v0.52.0
+   Compiling typenum v1.17.0
+   Compiling parking_lot_core v0.9.10
+   Compiling quote v1.0.36
+   Compiling version_check v0.9.4
+   Compiling pkg-config v0.3.30
+   Compiling syn v2.0.98
+   Compiling aho-corasick v1.1.3
+   Compiling generic-array v0.14.7
+   Compiling regex-syntax v0.8.5
+   Compiling either v1.13.0
+   Compiling slab v0.4.9
+   Compiling thiserror v1.0.61
+   Compiling rustix v0.38.34
+   Compiling windows_x86_64_msvc v0.48.5
+   Compiling log v0.4.22
+   Compiling regex-automata v0.4.9
+   Compiling glob v0.3.1
+   Compiling bitflags v2.9.1
+   Compiling scopeguard v1.2.0
+   Compiling clang-sys v1.8.1
+   Compiling futures-core v0.3.31
+   Compiling once_cell v1.19.0
+   Compiling smallvec v1.13.2
+   Compiling minimal-lexical v0.2.1
+   Compiling futures-sink v0.3.31
+   Compiling winapi-util v0.1.8
+   Compiling regex v1.11.1
+   Compiling errno v0.3.9
+   Compiling home v0.5.9
+   Compiling nom v7.1.3
+   Compiling libloading v0.8.4
+   Compiling pin-project-lite v0.2.14
+   Compiling which v4.4.2
+   Compiling getrandom v0.3.2
+   Compiling serde_derive v1.0.203
+   Compiling thiserror-impl v1.0.61
+   Compiling futures-macro v0.3.31
+   Compiling tokio-macros v2.5.0
+   Compiling thiserror v2.0.11
+   Compiling cexpr v0.6.0
+   Compiling getrandom v0.2.15
+   Compiling anyhow v1.0.98
+   Compiling thiserror-impl v2.0.11
+   Compiling zstd-sys v2.0.11+zstd.1.5.6
+   Compiling num-traits v0.2.19
+   Compiling rayon-core v1.12.1
+   Compiling lazy_static v1.5.0
+   Compiling parking_lot v0.12.3
+   Compiling bytes v1.10.1
+   Compiling pin-utils v0.1.0
+   Compiling bitflags v1.3.2
+   Compiling simd-adler32 v0.3.7
+   Compiling socket2 v0.5.10
+   Compiling mio v1.0.3
+   Compiling httparse v1.10.1
+   Compiling native-tls v0.2.12
+   Compiling rustc-hash v1.1.0
+   Compiling lazycell v1.3.0
+   Compiling peeking_take_while v0.1.2
+   Compiling futures-channel v0.3.31
+   Compiling atty v0.2.14
+   Compiling autocfg v0.1.8
+   Compiling rand_core v0.4.2
+   Compiling adler v1.0.2
+   Compiling humantime v2.1.0
+   Compiling unicode-width v0.1.13
+   Compiling futures-io v0.3.31
+   Compiling futures-task v0.3.31
+   Compiling textwrap v0.11.0
+   Compiling miniz_oxide v0.7.4
+   Compiling crypto-common v0.1.6
+   Compiling termcolor v1.4.1
+   Compiling futures-util v0.3.31
+   Compiling zerocopy v0.8.14
+   Compiling strsim v0.8.0
+   Compiling vec_map v0.8.2
+   Compiling bindgen v0.59.2
+   Compiling clap v2.34.0
+   Compiling env_logger v0.9.3
+   Compiling crc32fast v1.4.2
+   Compiling byteorder v1.5.0
+   Compiling windows-link v0.1.1
+   Compiling proc-macro2 v0.4.30
+   Compiling protobuf v3.7.2
+   Compiling subtle v2.6.1
+   Compiling flate2 v1.0.30
+   Compiling windows-targets v0.48.5
+   Compiling block-buffer v0.10.4
+   Compiling same-file v1.0.6
+   Compiling ppv-lite86 v0.2.17
+   Compiling unicode-xid v0.1.0
+   Compiling hashbrown v0.14.5
+   Compiling equivalent v1.0.1
+   Compiling itoa v1.0.11
+   Compiling walkdir v2.5.0
+   Compiling tokio v1.44.2
+   Compiling indexmap v2.2.6
+   Compiling digest v0.10.7
+   Compiling rand_core v0.3.1
+   Compiling rand_core v0.6.4
+   Compiling crossbeam-epoch v0.9.18
+   Compiling syn v0.15.44
+   Compiling cpufeatures v0.2.12
+   Compiling crossbeam-deque v0.8.5
+   Compiling libsodium-sys v0.2.7
+   Compiling quote v0.6.13
+   Compiling protobuf-support v3.7.2
+   Compiling fnv v1.0.7
+   Compiling fastrand v2.1.0
+   Compiling zstd-safe v7.1.0
+   Compiling ntapi v0.4.1
+   Compiling tempfile v3.10.1
+   Compiling http v1.3.1
+   Compiling rand_chacha v0.1.1
+   Compiling rand_pcg v0.1.2
+   Compiling serde_json v1.0.118
+   Compiling bytemuck v1.21.0
+   Compiling rand v0.6.5
+   Compiling pin-project-internal v1.1.5
+   Compiling backtrace v0.3.73
+   Compiling dlopen_derive v0.1.4
+   Compiling tinyvec_macros v0.1.1
+   Compiling siphasher v0.2.3
+   Compiling tinyvec v1.6.1
+   Compiling phf_shared v0.7.24
+   Compiling machine-uid v0.3.0 (https://github.com/rustdesk-org/machine-uid#381ff579)
+   Compiling protobuf-parse v3.7.2
+   Compiling protobuf-codegen v3.7.2
+   Compiling rayon v1.10.0
+   Compiling sha1 v0.10.6
+   Compiling rand_chacha v0.3.1
+   Compiling rand_isaac v0.1.1
+   Compiling rand_hc v0.1.0
+   Compiling rand_xorshift v0.1.1
+   Compiling windows-sys v0.48.0
+   Compiling rand_os v0.1.3
+   Compiling rand_jitter v0.1.4
+   Compiling fdeflate v0.3.4
+   Compiling schannel v0.1.23
+   Compiling percent-encoding v2.3.1
+   Compiling form_urlencoded v1.2.1
+   Compiling png v0.17.13
+   Compiling hbb_common v0.1.0 (O:\rustdesk-build\rustdesk\libs\hbb_common)
+   Compiling rand v0.8.5
+   Compiling unicode-normalization v0.1.23
+   Compiling syn v1.0.109
+   Compiling utf8parse v0.2.2
+   Compiling windows_x86_64_msvc v0.42.2
+   Compiling anstyle v1.0.7
+   Compiling unicode-bidi v0.3.15
+   Compiling anstyle-wincon v3.0.3
+   Compiling anstyle-parse v0.2.4
+   Compiling idna v0.5.0
+   Compiling phf_generator v0.7.24
+   Compiling rand_core v0.9.3
+   Compiling anstyle-query v1.1.0
+   Compiling crossbeam-channel v0.5.13
+   Compiling nasm-rs v0.3.0
+   Compiling colorchoice v1.0.1
+   Compiling dasp_sample v0.11.0
+   Compiling dunce v1.0.5
+   Compiling is_terminal_polyfill v1.70.0
+   Compiling mozjpeg-sys v2.2.2
+   Compiling anstream v0.6.14
+   Compiling rand_chacha v0.9.0
+   Compiling url v2.5.2
+   Compiling phf_codegen v0.7.24
+   Compiling tokio-native-tls v0.3.1
+   Compiling tokio-util v0.7.15
+   Compiling sha2 v0.10.8
+   Compiling windows-core v0.51.1
+   Compiling dirs-sys-next v0.1.2
+   Compiling ryu v1.0.18
+   Compiling rand v0.9.0
+   Compiling windows v0.51.1
+   Compiling target_build_utils v0.3.1
+   Compiling dlopen v0.1.8
+   Compiling num-traits v0.1.43
+   Compiling futures-executor v0.3.30
+   Compiling serde_spanned v0.6.6
+   Compiling toml_datetime v0.6.3
+   Compiling winreg v0.11.0
+   Compiling dtoa v0.4.8
+   Compiling signature v1.6.4
+   Compiling winnow v0.5.40
+   Compiling itoa v0.3.4
+   Compiling data-encoding v2.9.0
+   Compiling utf-8 v0.7.6
+   Compiling serde v0.9.15
+   Compiling ed25519 v1.5.3
+   Compiling tungstenite v0.26.2
+   Compiling futures v0.3.30
+   Compiling toml_edit v0.19.15
+   Compiling serde_json v0.9.10
+   Compiling directories-next v2.0.0
+   Compiling dasp_frame v0.11.0
+   Compiling nu-ansi-term v0.49.0
+   Compiling env_filter v0.1.3
+   Compiling image v0.25.1
+   Compiling phf v0.7.24
+   Compiling pin-project v1.1.5
+   Compiling rgb v0.8.50
+   Compiling toml v0.5.11
+   Compiling chrono v0.4.41
+   Compiling windows-result v0.3.2
+   Compiling nanorand v0.7.0
+   Compiling is-terminal v0.4.16
+   Compiling crossbeam-queue v0.3.11
+   Compiling tracing-core v0.1.34
+   Compiling spin v0.9.8
+   Compiling prettyplease v0.2.20
+   Compiling arrayvec v0.7.6
+   Compiling rustc-demangle v0.1.24
+   Compiling base64 v0.22.1
+   Compiling env_logger v0.11.6
+   Compiling mozjpeg v0.10.11
+   Compiling flexi_logger v0.27.4
+   Compiling flume v0.11.0
+   Compiling confy v0.4.0-2 (https://github.com/rustdesk-org/confy#83db9ec1)
+   Compiling tokio-socks v0.5.2-3 (https://github.com/rustdesk-org/tokio-socks#bdb9aa3d)
+   Compiling toml v0.7.8
+   Compiling zstd v0.13.1
+   Compiling tokio-tungstenite v0.26.2
+   Compiling sodiumoxide v0.2.7
+   Compiling dirs-next v2.0.0
+   Compiling default_net v0.1.0 (https://github.com/rustdesk-org/default_net#78f8f70c)
+   Compiling uuid v1.16.0
+   Compiling socket2 v0.3.19
+   Compiling mac_address v1.1.7
+   Compiling filetime v0.2.23
+   Compiling whoami v1.6.0
+   Compiling nokhwa-core v0.1.5 (https://github.com/rustdesk-org/nokhwa.git?branch=fix_from_raw_parts#c2f74662)
+   Compiling trackable_derive v1.0.0
+   Compiling http-body v1.0.1
+   Compiling hmac v0.12.1
+   Compiling windows-strings v0.4.0
+   Compiling tracing-attributes v0.1.29
+   Compiling windows-interface v0.59.1
+   Compiling windows-implement v0.60.0
+   Compiling dasp_ring_buffer v0.11.0
+   Compiling bindgen v0.65.1
+   Compiling rustversion v1.0.17
+   Compiling weezl v0.1.8
+   Compiling try-lock v0.2.5
+   Compiling windows_x86_64_msvc v0.34.0
+   Compiling bindgen v0.71.1
+   Compiling windows_x86_64_msvc v0.53.0
+   Compiling want v0.3.1
+   Compiling tracing v0.1.41
+   Compiling windows-core v0.61.0
+   Compiling trackable v1.3.0
+   Compiling windows-targets v0.42.2
+   Compiling jpeg-decoder v0.3.1
+   Compiling zune-inflate v0.2.54
+   Compiling itertools v0.12.1
+   Compiling bzip2-sys v0.1.11+1.0.8
+   Compiling webm-sys v1.0.4 (https://github.com/rustdesk-org/rust-webm#d2c4d3ac)
+   Compiling memoffset v0.6.5
+   Compiling half v2.4.1
+   Compiling lebe v0.5.2
+   Compiling bit_field v0.10.2
+   Compiling windows_x86_64_msvc v0.32.0
+   Compiling error-code v3.2.0
+   Compiling unicode-segmentation v1.11.0
+   Compiling zstd-safe v5.0.2+zstd.1.5.2
+   Compiling color_quant v1.1.0
+   Compiling nokhwa-bindings-macos v0.2.2 (https://github.com/rustdesk-org/nokhwa.git?branch=fix_from_raw_parts#c2f74662)
+   Compiling rustc-hash v2.1.1
+   Compiling tower-service v0.3.3
+   Compiling paste v1.0.15
+   Compiling gif v0.13.1
+   Compiling exr v1.72.0
+   Compiling sysinfo v0.29.10 (https://github.com/rustdesk-org/sysinfo?branch=rlim_max#90b1705d)
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:251:17
+    |
+251 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:283:17
+    |
+283 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+
+   Compiling tiff v0.9.1
+   Compiling trackable v0.2.24
+   Compiling hyper v1.6.0
+   Compiling dasp_rms v0.11.0
+   Compiling dasp_peak v0.11.0
+   Compiling windows v0.43.0
+   Compiling qoi v0.4.1
+   Compiling windows-strings v0.3.1
+   Compiling inout v0.1.3
+   Compiling enum-map-derive v0.17.0
+   Compiling serial-core v0.4.0
+   Compiling windows-result v0.1.2
+   Compiling heck v0.4.1
+   Compiling crc-catalog v2.4.0
+   Compiling widestring v1.1.0
+   Compiling tfc v0.7.0 (https://github.com/rustdesk-org/The-Fat-Controller?branch=history/rebase_upstream_20240722#78bb80a8)
+   Compiling overload v0.1.1
+   Compiling powerfmt v0.2.0
+   Compiling winreg v0.10.1
+   Compiling libm v0.2.8
+   Compiling base64ct v1.6.0
+   Compiling scrap v0.5.0 (O:\rustdesk-build\rustdesk\libs\scrap)
+   Compiling deranged v0.3.11
+   Compiling password-hash v0.4.2
+   Compiling nu-ansi-term v0.46.0
+   Compiling strum_macros v0.24.3
+   Compiling crc v3.3.0
+   Compiling windows-core v0.54.0
+   Compiling enum-map v2.7.3
+   Compiling serial-windows v0.4.0
+   Compiling cipher v0.4.4
+   Compiling image v0.24.9
+   Compiling hyper-util v0.1.12
+   Compiling dasp_envelope v0.11.0
+   Compiling windows v0.34.0
+   Compiling windows-targets v0.53.0
+   Compiling bytecodec v0.4.15
+   Compiling kcp-sys v0.1.0 (https://github.com/rustdesk-org/kcp-sys#32a6c09f)
+   Compiling keyboard-types v0.7.0
+   Compiling winres v0.1.12
+   Compiling dasp_interpolate v0.11.0
+   Compiling http-body-util v0.1.3
+   Compiling nokhwa-bindings-windows v0.4.2 (https://github.com/rustdesk-org/nokhwa.git?branch=fix_from_raw_parts#c2f74662)
+   Compiling nokhwa-bindings-linux v0.1.1 (https://github.com/rustdesk-org/nokhwa.git?branch=fix_from_raw_parts#c2f74662)
+   Compiling magnum-opus v0.4.0 (https://github.com/rustdesk-org/magnum-opus#5cd2bf98)
+   Compiling tracing-log v0.2.0
+   Compiling dasp_window v0.11.1
+   Compiling os-version v0.2.0
+   Compiling sharded-slab v0.1.7
+   Compiling num-integer v0.1.46
+   Compiling zerocopy-derive v0.7.34
+   Compiling windows-interface v0.52.0
+   Compiling windows-implement v0.52.0
+   Compiling thread_local v1.1.8
+   Compiling sync_wrapper v1.0.2
+   Compiling clipboard v0.1.0 (O:\rustdesk-build\rustdesk\libs\clipboard)
+   Compiling impersonate_system v0.1.0 (https://github.com/rustdesk-org/impersonate-system#2f429010)
+   Compiling enigo v0.0.14 (O:\rustdesk-build\rustdesk\libs\enigo)
+   Compiling windows-core v0.52.0
+   Compiling dpi v0.1.1
+   Compiling strum v0.24.1
+   Compiling clap_lex v0.7.1
+   Compiling time-core v0.1.2
+   Compiling cpal v0.15.3 (https://github.com/rustdesk-org/cpal?branch=osx-screencapturekit#6b374bca)
+   Compiling md5 v0.7.0
+   Compiling tower-layer v0.3.3
+   Compiling strsim v0.11.1
+   Compiling rustls-pki-types v1.11.0
+   Compiling num-conv v0.1.0
+   Compiling utf8-width v0.1.7
+   Compiling html-escape v0.2.13
+   Compiling rustls-pemfile v2.2.0
+   Compiling time v0.3.36
+   Compiling clap_builder v4.5.8
+   Compiling windows v0.52.0
+   Compiling tower v0.5.2
+   Compiling stun_codec v0.3.5
+   Compiling rdev v0.5.0-2 (https://github.com/rustdesk-org/rdev#f9b60b1d)
+   Compiling muda v0.13.5
+   Compiling nokhwa v0.10.7 (https://github.com/rustdesk-org/nokhwa.git?branch=fix_from_raw_parts#c2f74662)
+warning: `hbb_common` (lib) generated 2 warnings (2 duplicates)
+   Compiling rustdesk v1.4.2-mousemux-v2.1 (O:\rustdesk-build\rustdesk)
+   Compiling tracing-subscriber v0.3.19
+   Compiling zerocopy v0.7.34
+   Compiling num-bigint v0.4.6
+   Compiling dasp_signal v0.11.0
+   Compiling hyper-tls v0.6.0
+   Compiling zstd v0.11.2+zstd.1.5.2
+   Compiling windows v0.32.0
+   Compiling nix v0.25.1
+   Compiling webm v1.1.0 (https://github.com/rustdesk-org/rust-webm#d2c4d3ac)
+   Compiling bzip2 v0.4.4
+   Compiling win-sys v0.3.1
+   Compiling windows-registry v0.4.0
+   Compiling windows v0.54.0
+   Compiling aes v0.8.4
+   Compiling serial v0.4.0
+   Compiling pbkdf2 v0.11.0
+   Compiling windows-win v3.0.0
+   Compiling clipboard-win v5.4.0
+   Compiling windows v0.44.0
+   Compiling windows-sys v0.45.0
+   Compiling windows-numerics v0.2.0
+   Compiling windows-collections v0.2.0
+   Compiling windows-future v0.2.0
+   Compiling dasp_slice v0.11.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling rtoolbox v0.0.2
+   Compiling dashmap v6.1.0
+   Compiling async-compression v0.4.11
+   Compiling tokio-socks v0.5.2
+   Compiling filedescriptor v0.8.2 (https://github.com/rustdesk-org/wezterm?branch=rustdesk/pty_based_0.8.1#80174f80)
+   Compiling shared_library v0.1.9
+   Compiling auto_impl v1.3.0
+   Compiling quick-xml v0.30.0
+   Compiling windows-version v0.1.1
+   Compiling instant v0.1.13
+   Compiling base32 v0.4.0
+   Compiling num_cpus v1.16.0
+   Compiling qrcodegen v1.8.0
+   Compiling debug-helper v0.3.13
+   Compiling urlencoding v2.1.3
+   Compiling shell-words v1.1.0
+   Compiling constant_time_eq v0.2.6
+   Compiling ipnet v2.9.0
+   Compiling downcast-rs v1.2.1
+   Compiling mime v0.3.17
+   Compiling constant_time_eq v0.1.5
+   Compiling raw-window-handle v0.6.2
+   Compiling memalloc v0.1.0
+   Compiling tao v0.25.0 (https://github.com/rustdesk-org/tao?branch=dev#288c219c)
+   Compiling default-net v0.14.1
+   Compiling zip v0.6.6
+   Compiling reqwest v0.12.15 (https://github.com/rustdesk-org/reqwest#9e859438)
+   Compiling portable-pty v0.8.1 (https://github.com/rustdesk-org/wezterm?branch=rustdesk/pty_based_0.8.1#80174f80)
+   Compiling totp-rs v5.5.1
+   Compiling system_shutdown v4.0.1
+   Compiling qrcode-generator v4.1.9
+   Compiling cidr-utils v0.5.11
+   Compiling tauri-winrt-notification v0.1.3
+warning: unused import: `self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE`
+   --> O:\rustdesk-build\rustdesk\target\release\build\scrap-7c0d683ab5329de6\out/vpx_ffi.rs:911:9
+    |
+911 | pub use self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+   Compiling rpassword v7.3.1
+   Compiling dasp v0.11.0
+   Compiling windows-service v0.6.0
+   Compiling windows v0.61.1
+   Compiling fon v0.6.0
+warning: `hbb_common` (lib) generated 2 warnings
+   Compiling arboard v3.4.0 (https://github.com/rustdesk-org/arboard#4e16bad2)
+   Compiling clipboard-master v4.0.0-beta.6 (https://github.com/rustdesk-org/clipboard-master#4fb62e5b)
+warning: unused import: `DWORD_PTR`
+ --> libs\enigo\src\win\win_impl.rs:2:49
+  |
+2 | use self::winapi::shared::{basetsd::{ULONG_PTR, DWORD_PTR}, minwindef::*, windef::*};
+  |                                                 ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+   Compiling shared_memory v0.12.4
+warning: `enigo` (lib) generated 1 warning (run `cargo fix --lib -p enigo` to apply 1 suggestion)
+   Compiling runas v1.2.0
+   Compiling tray-icon v0.14.3 (https://github.com/tauri-apps/tray-icon#d4078696)
+   Compiling stunclient v0.4.1
+   Compiling clap v4.5.8
+   Compiling remote_printer v0.1.0 (O:\rustdesk-build\rustdesk\libs\remote_printer)
+   Compiling virtual_display v0.1.0 (O:\rustdesk-build\rustdesk\libs\virtual_display)
+   Compiling parity-tokio-ipc v0.7.3-5 (https://github.com/rustdesk-org/parity-tokio-ipc#c8c8bbcb)
+   Compiling wallpaper v3.2.0 (https://github.com/rustdesk-org/wallpaper.rs#ce4a0cd3)
+   Compiling repng v0.2.2
+warning: `scrap` (lib) generated 1 warning (run `cargo fix --lib -p scrap` to apply 1 suggestion)
+   Compiling sciter-rs v0.5.57 (https://github.com/rustdesk-org/rust-sciter?branch=dyn#5322f3a7)
+   Compiling ctrlc v3.4.4
+   Compiling ringbuf v0.3.3
+   Compiling async-trait v0.1.80
+   Compiling serde_repr v0.1.19
+   Compiling sys-locale v0.3.1
+   Compiling hex v0.4.3
+   Compiling wol-rs v1.0.1
+   Compiling shutdown_hooks v0.1.0
+warning: the item `System` is imported redundantly
+    --> src\platform\windows.rs:3106:9
+     |
+17   |     sysinfo::{Pid, System},
+     |                    ------ the item `System` is already imported here
+...
+3106 |     use hbb_common::sysinfo::System;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused imports: `HWND_MESSAGE`, `WS_OVERLAPPEDWINDOW`
+  --> src\platform\windows_mousemux.rs:17:9
+   |
+17 |         HWND_MESSAGE, MSG, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, CS_HREDRAW, CS_VREDRAW,
+   |         ^^^^^^^^^^^^                    ^^^^^^^^^^^^^^^^^^^
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1788:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1788 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1812:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1812 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `MOUSE_BUTTON_LEFT`, `MOUSE_TYPE_DOWN`, `MOUSE_TYPE_UP`, `MOUSE_TYPE_WHEEL`
+ --> src\ui_session_interface.rs:3:13
+  |
+3 |     input::{MOUSE_BUTTON_LEFT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP, MOUSE_TYPE_WHEEL},
+  |             ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: use of deprecated function `hbb_common::base64::encode`: Use Engine::encode
+   --> src\hbbs_http\sync.rs:163:52
+    |
+163 |                         hash = hbb_common::base64::encode(&res[..]);
+    |                                                    ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: value assigned to `event_num_enabled` is never read
+   --> src\server\input_service.rs:205:17
+    |
+205 |         let mut event_num_enabled = false;
+    |                 ^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` on by default
+
+warning: variable does not need to be mutable
+  --> src\tray.rs:60:9
+   |
+60 |     let mut event_loop = EventLoopBuilder::new().build();
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+warning: type `SendSyncHwnd` is more private than the item `MouseMuxState::hwnd`
+  --> src\platform\windows_mousemux.rs:70:5
+   |
+70 |     pub hwnd: Option<SendSyncHwnd>,  // RustDesk's message window handle
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `MouseMuxState::hwnd` is reachable at visibility `pub`
+   |
+note: but type `SendSyncHwnd` is only usable at visibility `pub(self)`
+  --> src\platform\windows_mousemux.rs:55:1
+   |
+55 | struct SendSyncHwnd(HWND);
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: fields `x` and `y` are never read
+   --> src\server\input_service.rs:103:5
+    |
+100 | struct Input {
+    |        ----- fields in this struct
+...
+103 |     x: i32,
+    |     ^
+104 |     y: i32,
+    |     ^
+    |
+    = note: `Input` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` on by default
+
+warning: constant `MOUSE_MOVE_PROTECTION_TIMEOUT` is never used
+   --> src\server\input_service.rs:495:7
+    |
+495 | const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MOUSE_ACTIVE_DISTANCE` is never used
+   --> src\server\input_service.rs:497:7
+    |
+497 | const MOUSE_ACTIVE_DISTANCE: i32 = 5;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_last_input_cursor_pos` is never used
+   --> src\server\input_service.rs:938:4
+    |
+938 | fn get_last_input_cursor_pos() -> (i32, i32) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `query_online_states` is never used
+    --> src\client.rs:3906:18
+     |
+3906 |     pub async fn query_online_states<F: FnOnce(Vec<String>, Vec<String>)>(ids: Vec<String>, f: F) {
+     |                  ^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_online_stream` is never used
+    --> src\client.rs:3926:14
+     |
+3926 |     async fn create_online_stream() -> ResultType<Stream> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `query_online_states_` is never used
+    --> src\client.rs:3941:14
+     |
+3941 |     async fn query_online_states_(
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `http_request` and `get_http_status` are never used
+   --> src\ui.rs:587:8
+    |
+200 | impl UI {
+    | ------- methods in this implementation
+...
+587 |     fn http_request(&self, url: String, method: String, body: Option<String>, header: String) {
+    |        ^^^^^^^^^^^^
+...
+603 |     fn get_http_status(&self, url: String) -> Option<String> {
+    |        ^^^^^^^^^^^^^^^
+
+warning: methods `into_string` and `save` are never used
+   --> src\auth_2fa.rs:123:8
+    |
+122 | impl TelegramBot {
+    | ---------------- methods in this implementation
+123 |     fn into_string(&self) -> ResultType<String> {
+    |        ^^^^^^^^^^^
+...
+133 |     fn save(&self) -> ResultType<()> {
+    |        ^^^^
+
+warning: function `get_chatid_telegram` is never used
+   --> src\auth_2fa.rs:165:8
+    |
+165 | pub fn get_chatid_telegram(bot_token: &str) -> ResultType<Option<String>> {
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: static `CONTROLLING_SESSION_COUNT` is never used
+  --> src\updater.rs:23:8
+   |
+23 | static CONTROLLING_SESSION_COUNT: AtomicUsize = AtomicUsize::new(0);
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `update_controlling_session_count` is never used
+  --> src\updater.rs:27:8
+   |
+27 | pub fn update_controlling_session_count(count: usize) {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `http_request` is never used
+   --> src\ui_interface.rs:788:8
+    |
+788 | pub fn http_request(url: String, method: String, body: Option<String>, header: String) {
+    |        ^^^^^^^^^^^^
+
+warning: function `get_async_http_status` is never used
+   --> src\ui_interface.rs:808:8
+    |
+808 | pub fn get_async_http_status(url: String) -> Option<String> {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `has_valid_bot` is never used
+    --> src\ui_interface.rs:1450:8
+     |
+1450 | pub fn has_valid_bot() -> bool {
+     |        ^^^^^^^^^^^^^
+
+warning: function `verify_bot` is never used
+    --> src\ui_interface.rs:1454:8
+     |
+1454 | pub fn verify_bot(token: String) -> String {
+     |        ^^^^^^^^^^
+
+warning: multiple fields are never read
+  --> src\hbbs_http\downloader.rs:39:5
+   |
+38 | struct Downloader {
+   |        ---------- fields in this struct
+39 |     data: Vec<u8>,
+   |     ^^^^
+40 |     path: Option<PathBuf>,
+   |     ^^^^
+41 |     // Some file may be empty, so we use Option<u64> to indicate if the size is known
+42 |     total_size: Option<u64>,
+   |     ^^^^^^^^^^
+43 |     downloaded_size: u64,
+   |     ^^^^^^^^^^^^^^^
+44 |     error: Option<String>,
+   |     ^^^^^
+45 |     finished: bool,
+   |     ^^^^^^^^
+46 |     tx_cancel: UnboundedSender<()>,
+   |     ^^^^^^^^^
+
+warning: function `download_file` is never used
+  --> src\hbbs_http\downloader.rs:50:8
+   |
+50 | pub fn download_file(
+   |        ^^^^^^^^^^^^^
+
+warning: function `do_download` is never used
+   --> src\hbbs_http\downloader.rs:128:10
+    |
+128 | async fn do_download(
+    |          ^^^^^^^^^^^
+
+warning: function `get_download_data` is never used
+   --> src\hbbs_http\downloader.rs:239:8
+    |
+239 | pub fn get_download_data(id: &str) -> ResultType<DownloadData> {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `cancel` is never used
+   --> src\hbbs_http\downloader.rs:264:8
+    |
+264 | pub fn cancel(id: &str) {
+    |        ^^^^^^
+
+warning: function `remove` is never used
+   --> src\hbbs_http\downloader.rs:272:8
+    |
+272 | pub fn remove(id: &str) {
+    |        ^^^^^^
+
+warning: `rustdesk` (lib) generated 31 warnings (run `cargo fix --lib -p rustdesk` to apply 3 suggestions)
+warning: unused import: `librustdesk::*`
+ --> src/service.rs:1:5
+  |
+1 | use librustdesk::*;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `rustdesk` (bin "service") generated 1 warning (run `cargo fix --bin "service"` to apply 1 suggestion)
+    Finished release [optimized] target(s) in 31m 23s

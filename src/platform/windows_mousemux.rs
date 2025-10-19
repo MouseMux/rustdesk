@@ -381,15 +381,13 @@ pub fn get_rustdesk_hwnd() -> Option<HWND> {
     MOUSEMUX_STATE.lock().unwrap().hwnd.map(|SendSyncHwnd(h)| h)
 }
 
-/// Get IDs for a specific connection
-pub fn get_ids_for_connection(conn_id: i32) -> Option<(u32, u32)> {
+/// Get IDs for a specific connection (returns separate Options for mouse and keyboard)
+/// This allows using mouse ID even if keyboard ID hasn't arrived yet (and vice versa)
+pub fn get_ids_for_connection(conn_id: i32) -> (Option<u32>, Option<u32>) {
     let state = MOUSEMUX_STATE.lock().unwrap();
-    state.connections.get(&conn_id).and_then(|conn| {
-        match (conn.mouse_id, conn.keyboard_id) {
-            (Some(m), Some(k)) => Some((m, k)),
-            _ => None,
-        }
-    })
+    state.connections.get(&conn_id)
+        .map(|conn| (conn.mouse_id, conn.keyboard_id))
+        .unwrap_or((None, None))
 }
 
 /// Clear IDs for a specific connection

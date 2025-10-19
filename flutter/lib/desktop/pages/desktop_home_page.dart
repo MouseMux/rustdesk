@@ -406,6 +406,18 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+              if (!isOutgoingOnly)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "MouseMux Compliant Edition",
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ).marginOnly(top: 2),
             ],
           ),
           SizedBox(
