@@ -49,6 +49,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   var watchIsCanRecordAudio = false;
   Timer? _updateTimer;
   bool isCardClosed = false;
+  var _connectedUsersCount = 0;
 
   final RxBool _editHover = false.obs;
   final RxBool _block = false.obs;
@@ -92,6 +93,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
+      if (!isOutgoingOnly) buildMouseMuxInfo(context),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
@@ -387,6 +389,92 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     );
   }
 
+  buildMouseMuxInfo(BuildContext context) {
+    final isOutgoingOnly = bind.isOutgoingOnly();
+    if (isOutgoingOnly) {
+      return Container();
+    }
+
+    // Use the state variable instead of calling bind directly
+    String userCountText;
+    if (_connectedUsersCount == 0) {
+      userCountText = "Currently 0 MouseMux users";
+    } else if (_connectedUsersCount == 1) {
+      userCountText = "1 MouseMux user";
+    } else {
+      userCountText = "$_connectedUsersCount MouseMux users";
+    }
+
+    return Container(
+      margin: EdgeInsets.only(left: 20.0, right: 16, top: 16.0, bottom: 13),
+      padding: EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            "RustDesk",
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          SizedBox(height: 4.0),
+          Text(
+            "MouseMux compliant Edition",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+              color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.85),
+            ),
+          ),
+          SizedBox(height: 16.0),
+          Text(
+            userCountText,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          SizedBox(height: 16.0),
+          Text(
+            "Multiple clients can connect to this host at the same time!",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).textTheme.bodySmall?.color,
+              height: 1.4,
+            ),
+          ),
+          SizedBox(height: 10.0),
+          InkWell(
+            onTap: () async {
+              final url = Uri.parse('https://www.mousemux.com/pages/rustdesk');
+              await launchUrl(url);
+            },
+            child: Text(
+              "Click for support info",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).colorScheme.primary,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   buildTip(BuildContext context) {
     final isOutgoingOnly = bind.isOutgoingOnly();
     return Padding(
@@ -404,6 +492,20 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                   child: Text(
                     translate("Your Desktop"),
                     style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              if (!isOutgoingOnly)
+                SizedBox(height: 6.0),
+              if (!isOutgoingOnly)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "MouseMux Compliant Edition",
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6),
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ),
             ],
@@ -429,6 +531,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildHelpCards(String updateUrl) {
+    // MouseMux Edition: No update or install prompts
+    if (bind.isCustomClient()) {
+      return Container();
+    }
     if (!bind.isCustomClient() &&
         updateUrl.isNotEmpty &&
         !isCardClosed &&
@@ -702,6 +808,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       final v = await mainGetBoolOption(kOptionStopService);
       if (v != svcStopped.value) {
         svcStopped.value = v;
+        setState(() {});
+      }
+      // Check for connected users count changes
+      final currentCount = bind.mainGetConnectedUsersCount();
+      if (_connectedUsersCount != currentCount) {
+        _connectedUsersCount = currentCount;
         setState(() {});
       }
       if (watchIsCanScreenRecording) {

@@ -1,10 +1,10 @@
 [package]
 name = "rustdesk"
-version = "1.4.3"
-authors = ["rustdesk <info@rustdesk.com>"]
+version = "1.4.2-mousemux-v2.1"
+authors = ["rustdesk <info@rustdesk.com>", "MouseMux Edition"]
 edition = "2021"
 build= "build.rs"
-description = "RustDesk Remote Desktop"
+description = "RustDesk MouseMux Edition - Multi-user Remote Desktop"
 default-run = "rustdesk"
 rust-version = "1.75"
 
@@ -144,10 +144,6 @@ core-graphics = "0.22"
 include_dir = "0.7"
 fruitbasket = "0.10"
 objc_id = "0.1"
-# If we use piet "0.7" here, we must also update core-graphics to "0.24".
-piet = "0.6"
-piet-coregraphics = "0.6"
-foreign-types = "0.3"
 
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 tray-icon = { git = "https://github.com/tauri-apps/tray-icon" }
@@ -159,11 +155,6 @@ keepawake = { git = "https://github.com/rustdesk-org/keepawake-rs" }
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 wallpaper = { git = "https://github.com/rustdesk-org/wallpaper.rs" }
-tiny-skia = "0.11"
-softbuffer = "0.4"
-fontdb = "0.23"
-bytemuck = "1.23"
-ttf-parser = "0.25"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 # https://github.com/rustdesk/rustdesk-server-pro/issues/189, using native-tls for better tls support
@@ -190,7 +181,6 @@ nix = { version = "0.29", features = ["term", "process"]}
 gtk = "0.18"
 termios = "0.3"
 terminfo = "0.8"
-winit = "0.30"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13"
@@ -202,9 +192,9 @@ members = ["libs/scrap", "libs/hbb_common", "libs/enigo", "libs/clipboard", "lib
 exclude = ["vdi/host", "examples/custom_plugin"]
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2025 Purslane Ltd. All rights reserved."
-ProductName = "RustDesk"
-FileDescription = "RustDesk Remote Desktop"
+LegalCopyright = "Copyright © 2025 Purslane Ltd. All rights reserved. MouseMux Edition."
+ProductName = "RustDesk MouseMux Edition"
+FileDescription = "RustDesk MouseMux Edition - Multi-user Remote Desktop"
 OriginalFilename = "rustdesk.exe"
 
 [target.'cfg(target_os="windows")'.build-dependencies]
@@ -215,6 +205,7 @@ winapi = { version = "0.3", features = [ "winnt", "pdh", "synchapi" ] }
 cc = "1.0"
 hbb_common = { path = "libs/hbb_common" }
 os-version = "0.2"
+chrono = "0.4"
 
 [dev-dependencies]
 hound = "3.5"

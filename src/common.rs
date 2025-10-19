@@ -116,7 +116,15 @@ pub fn global_init() -> bool {
     true
 }
 
-pub fn global_clean() {}
+pub fn global_clean() {
+    #[cfg(windows)]
+    {
+        // Notify MouseMux we're shutting down
+        crate::platform::windows_mousemux::notify_shutdown();
+        // Clean up message window
+        crate::platform::windows_mousemux::shutdown_mousemux_window();
+    }
+}
 
 #[inline]
 pub fn set_server_running(b: bool) {
@@ -1740,7 +1748,7 @@ pub fn get_builtin_option(key: &str) -> String {
 
 #[inline]
 pub fn is_custom_client() -> bool {
-    get_app_name() != "RustDesk"
+    true // MouseMux Edition: Always return true to disable update checks
 }
 
 pub fn verify_login(_raw: &str, _id: &str) -> bool {
@@ -2038,22 +2046,6 @@ pub async fn get_ipv6_socket() -> Option<(Arc<UdpSocket>, bytes::Bytes)> {
         }
     }
     None
-}
-
-// The color is the same to `str2color()` in flutter.
-pub fn str2color(s: &str, alpha: u8) -> u32 {
-    let bytes = s.as_bytes();
-    // dart code `160 << 16 + 114 << 8 + 91` results `0`.
-    let mut hash: u32 = 0;
-    for &byte in bytes {
-        let code = byte as u32;
-        hash = code.wrapping_add((hash << 5).wrapping_sub(hash));
-    }
-
-    hash = hash % 16777216;
-    let rgb = hash & 0xFF7FFF;
-
-    (alpha as u32) << 24 | rgb
 }
 
 #[cfg(test)]

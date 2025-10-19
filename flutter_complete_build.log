@@ -1,0 +1,247 @@
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:251:17
+    |
+251 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:283:17
+    |
+283 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+
+warning: `hbb_common` (lib) generated 2 warnings
+    Finished release [optimized] target(s) in 8.97s
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:251:17
+    |
+251 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:283:17
+    |
+283 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+
+warning: `hbb_common` (lib) generated 2 warnings
+warning: `hbb_common` (lib) generated 2 warnings (2 duplicates)
+warning: unused import: `self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE`
+   --> O:\RustDesk-build\rustdesk-flutter\target\release\build\scrap-20c911187b02647f\out/vpx_ffi.rs:911:9
+    |
+911 | pub use self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: `scrap` (lib) generated 1 warning (run `cargo fix --lib -p scrap` to apply 1 suggestion)
+warning: the item `System` is imported redundantly
+    --> src\platform\windows.rs:3106:9
+     |
+17   |     sysinfo::{Pid, System},
+     |                    ------ the item `System` is already imported here
+...
+3106 |     use hbb_common::sysinfo::System;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1780:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1780 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1804:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1804 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `MOUSE_BUTTON_LEFT`, `MOUSE_TYPE_DOWN`, `MOUSE_TYPE_UP`, `MOUSE_TYPE_WHEEL`
+ --> src\ui_session_interface.rs:3:13
+  |
+3 |     input::{MOUSE_BUTTON_LEFT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP, MOUSE_TYPE_WHEEL},
+  |             ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: use of deprecated function `hbb_common::base64::encode`: Use Engine::encode
+   --> src\hbbs_http\sync.rs:187:52
+    |
+187 |                         hash = hbb_common::base64::encode(&res[..]);
+    |                                                    ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: variable does not need to be mutable
+  --> src\tray.rs:60:9
+   |
+60 |     let mut event_loop = EventLoopBuilder::new().build();
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+warning: fields `x` and `y` are never read
+   --> src\server\input_service.rs:105:5
+    |
+102 | struct Input {
+    |        ----- fields in this struct
+...
+105 |     x: i32,
+    |     ^
+106 |     y: i32,
+    |     ^
+    |
+    = note: `Input` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` on by default
+
+warning: constant `MOUSE_MOVE_PROTECTION_TIMEOUT` is never used
+   --> src\server\input_service.rs:451:7
+    |
+451 | const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MOUSE_ACTIVE_DISTANCE` is never used
+   --> src\server\input_service.rs:453:7
+    |
+453 | const MOUSE_ACTIVE_DISTANCE: i32 = 5;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_last_input_cursor_pos` is never used
+   --> src\server\input_service.rs:901:4
+    |
+901 | fn get_last_input_cursor_pos() -> (i32, i32) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `rustdesk` (lib) generated 10 warnings (run `cargo fix --lib -p rustdesk` to apply 2 suggestions)
+    Finished release [optimized] target(s) in 6.92s
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 72.0.0 (91.0.0 available)
+  analyzer 6.7.0 (8.4.0 available)
+  animations 2.0.11 (2.1.0 available)
+  archive 3.6.1 (4.0.7 available)
+  back_button_interceptor 6.0.2 (8.0.4 available)
+  build 2.4.1 (4.0.2 available)
+  build_cli_annotations 2.1.0 (2.1.1 available)
+  build_config 1.1.1 (1.2.0 available)
+  build_daemon 4.0.2 (4.0.4 available)
+  build_resolvers 2.4.2 (3.0.4 available)
+  build_runner 2.4.13 (2.9.0 available)
+  build_runner_core 7.3.2 (9.3.2 available)
+  built_value 8.10.1 (8.12.0 available)
+  cached_network_image 3.3.1 (3.4.1 available)
+  cached_network_image_platform_interface 4.0.0 (4.1.1 available)
+  cached_network_image_web 1.2.0 (1.3.1 available)
+  characters 1.3.0 (1.4.1 available)
+  checked_yaml 2.0.3 (2.0.4 available)
+  clock 1.1.1 (1.1.2 available)
+  code_builder 4.10.1 (4.11.0 available)
+  collection 1.18.0 (1.19.1 available)
+  dart_style 2.3.7 (3.1.2 available)
+  desktop_drop 0.4.4 (0.7.0 available)
+  device_info_plus 9.1.2 (12.1.0 available)
+  device_info_plus_platform_interface 7.0.2 (7.0.3 available)
+  extended_text 14.0.0 (15.0.2 available)
+  external_path 1.0.3 (2.2.0 available)
+  ffi 2.1.3 (2.1.4 available)
+  ffigen 8.0.2 (19.1.0 available)
+  file 6.1.4 (7.0.1 available)
+  file_picker 5.5.0 (10.3.3 available)
+  file_selector_macos 0.9.4+2 (0.9.4+4 available)
+  flex_color_picker 3.6.0 (3.7.1 available)
+  flex_seed_scheme 3.4.1 (3.5.1 available)
+  flutter_cache_manager 3.3.1 (3.4.1 available)
+  flutter_keyboard_visibility 5.4.1 (6.0.0 available)
+  flutter_launcher_icons 0.13.1 (0.14.4 available)
+  flutter_lints 2.0.3 (6.0.0 available)
+! flutter_plugin_android_lifecycle 2.0.17 (overridden) (2.0.32 available)
+  flutter_rust_bridge 1.80.1 (2.11.1 available)
+  flutter_svg 2.1.0 (2.2.1 available)
+  freezed 2.5.7 (3.2.3 available)
+  freezed_annotation 2.4.4 (3.1.0 available)
+  google_fonts 6.2.1 (6.3.2 available)
+  http 1.4.0 (1.5.0 available)
+  http_parser 4.0.2 (4.1.2 available)
+  icons_launcher 2.1.7 (3.0.3 available)
+  image 4.3.0 (4.5.4 available)
+  image_picker 1.1.2 (1.2.0 available)
+  image_picker_android 0.8.12+21 (0.8.13+5 available)
+  image_picker_for_web 3.0.6 (3.1.0 available)
+  image_picker_ios 0.8.12+2 (0.8.13 available)
+  image_picker_linux 0.2.1+2 (0.2.2 available)
+  image_picker_macos 0.2.1+2 (0.2.2 available)
+  image_picker_platform_interface 2.10.1 (2.11.0 available)
+  image_picker_windows 0.2.1+1 (0.2.2 available)
+! intl 0.19.0 (overridden) (0.20.2 available)
+  js 0.6.7 (0.7.2 available)
+  lints 2.1.1 (6.0.0 available)
+  macros 0.1.2-main.4 (0.1.3-main.0 available)
+  material_color_utilities 0.11.1 (0.13.0 available)
+  meta 1.15.0 (1.17.0 available)
+  package_info_plus 4.2.0 (9.0.0 available)
+  package_info_plus_platform_interface 2.0.1 (3.2.1 available)
+  path 1.9.0 (1.9.1 available)
+  path_provider_android 2.2.15 (2.2.20 available)
+  path_provider_foundation 2.4.1 (2.4.2 available)
+  petitparser 6.0.2 (7.0.1 available)
+  pool 1.5.1 (1.5.2 available)
+  provider 6.1.5 (6.1.5+1 available)
+  pubspec_parse 1.4.0 (1.5.0 available)
+  pull_down_button 0.9.4 (0.10.2 available)
+  puppeteer 3.16.0 (3.20.0 available)
+  rxdart 0.27.7 (0.28.0 available)
+  screen_retriever 0.1.9 (0.2.0 available)
+  scroll_pos 0.4.0 (0.5.0 available)
+  shelf 1.4.1 (1.4.2 available)
+  shelf_web_socket 1.0.4 (3.0.0 available)
+  source_gen 1.5.0 (4.0.2 available)
+  sqflite 2.2.0 (2.4.2 available)
+  sqflite_common 2.5.4+6 (2.5.6 available)
+  synchronized 3.3.0+3 (3.4.0 available)
+  test_api 0.7.6 (0.7.7 available)
+  uni_links_desktop 0.1.7 (0.2.0 available)
+  url_launcher 6.3.1 (6.3.2 available)
+  url_launcher_android 6.3.14 (6.3.24 available)
+  url_launcher_ios 6.3.3 (6.3.4 available)
+  url_launcher_macos 3.2.2 (3.2.3 available)
+  url_launcher_web 2.3.3 (2.4.1 available)
+  uuid 3.0.7 (4.5.1 available)
+  vector_graphics 1.1.18 (1.1.19 available)
+  vector_graphics_compiler 1.1.16 (1.1.19 available)
+  vector_math 2.1.4 (2.2.0 available)
+  video_player 2.9.5 (2.10.0 available)
+  video_player_android 2.7.16 (2.8.17 available)
+  video_player_avfoundation 2.7.1 (2.8.4 available)
+  video_player_platform_interface 6.3.0 (6.5.0 available)
+  video_player_web 2.3.5 (2.4.0 available)
+  wakelock_plus 1.2.1 (1.4.0 available)
+  wakelock_plus_platform_interface 1.2.3 (1.3.0 available)
+  watcher 1.1.2 (1.1.4 available)
+  web 0.5.1 (1.1.1 available)
+  web_socket_channel 2.4.5 (3.0.3 available)
+  win32 5.10.1 (5.15.0 available)
+  win32_registry 1.1.5 (2.1.0 available)
+  xml 6.5.0 (6.6.1 available)
+Got dependencies!
+106 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Building with plugins requires symlink support.
+
+Please enable Developer Mode in your system settings. Run
+  start ms-settings:developers
+to open settings.
+Error occurred when executing: `flutter build windows --release`. Exiting.
+features: ['flutter']
+False

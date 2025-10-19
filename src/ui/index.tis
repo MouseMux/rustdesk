@@ -341,7 +341,6 @@ class MyIdMenu: Reactor.Component {
                 <div .separator />
                 <li #allow-darktheme><span>{svg_checkmark}</span>{translate('Dark Theme')}</li>
                 <Languages />
-                <li #allow-auto-update><span>{svg_checkmark}</span>{translate('Auto update')}</li> 
                 <li #about>{translate('About')} {" "}{handler.get_app_name()}</li>
             </menu>
         </popup>;
@@ -577,9 +576,7 @@ class App: Reactor.Component
                         </div>
                         <PasswordArea />
                     </div>
-                    {!is_win || handler.is_installed() ? "": <InstallMe />}
-                    {software_update_url ? <UpdateMe /> : ""}
-                    {is_win && handler.is_installed() && !software_update_url && handler.is_installed_lower_version() ? <UpgradeMe /> : ""}
+                    {!is_win || handler.is_installed() ? "" : <InstallMe />}
                     {is_can_screen_recording ? "": <CanScreenRecording />}
                     {is_can_screen_recording && !handler.is_process_trusted(false) ? <TrustMe /> : ""}
                     {!service_stopped && is_can_screen_recording && handler.is_process_trusted(false) && handler.is_installed() && !handler.is_installed_daemon(false) ? <InstallDaemon /> : ""}
@@ -620,15 +617,19 @@ class App: Reactor.Component
 
 class InstallMe: Reactor.Component {
     function render() {
-        return <div .install-me>
-            <span />
-            <div>{translate('install_tip')}</div>
-            <div><button #install-me .button>{translate('Install')}</button></div>
+        return <div .install-me style="background: #ffe4cc; color: #000000; display: flex; flex-direction: column; height: 100%; padding: 2em;">
+            <div style="font-weight: normal;"><div style="font-size: 1.56em;">RustDesk</div>
+            <div><br/><br/></div>
+            <div style="font-size: 1.0em;">A MouseMux compliant edition!</div></div>
+            <div style="flex: 1;"></div>
+            <div><br/><br/></div>
+            <div style="font-size: 0.72em; line-height: 1.4; margin-bottom: 0.5em; font-weight: normal;">Multiple clients can connect to this host at the same time!</div>
+            <div style="font-size: 0.72em; text-align: center;"><span .link #support-info style="color: #0066cc;">click for support info</span></div>
         </div>;
     }
 
-    event click $(#install-me) {
-        handler.goto_install();
+    event click $(#support-info) {
+        handler.open_url("https://www.mousemux.com/pages/rustdesk");
     }
 }
 

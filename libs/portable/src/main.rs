@@ -17,7 +17,7 @@ const APP_METADATA: &[u8] = include_bytes!("../app_metadata.toml");
 const APP_METADATA: &[u8] = &[];
 const APP_METADATA_CONFIG: &str = "meta.toml";
 const META_LINE_PREFIX_TIMESTAMP: &str = "timestamp = ";
-const APP_PREFIX: &str = "rustdesk";
+const APP_PREFIX: &str = "rustdesk-mousemux-edition";
 const APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
 #[cfg(windows)]
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";
@@ -92,44 +92,10 @@ fn setup(
     }
     write_meta(&dir, ts);
     #[cfg(windows)]
-    win::copy_runtime_broker(&dir);
+    windows::copy_runtime_broker(&dir);
     #[cfg(linux)]
     reader.configure_permission(&dir);
     Some(dir.join(&reader.exe))
-}
-
-fn use_null_stdio() -> bool {
-    #[cfg(windows)]
-    {
-        // When running in CMD on Windows 7, using Stdio::inherit() with spawn returns an "invalid handle" error.
-        // Since using Stdio::null() didn’t cause any issues, and determining whether the program is launched from CMD or by double-clicking would require calling more APIs during startup, we also use Stdio::null() when launched by double-clicking on Windows 7.
-        let is_windows_7 = is_windows_7();
-        println!("is windows7: {}", is_windows_7);
-        return is_windows_7;
-    }
-    #[cfg(not(windows))]
-    false
-}
-
-#[cfg(windows)]
-fn is_windows_7() -> bool {
-    use windows::Wdk::System::SystemServices::RtlGetVersion;
-    use windows::Win32::System::SystemInformation::OSVERSIONINFOW;
-
-    unsafe {
-        let mut version_info = OSVERSIONINFOW::default();
-        version_info.dwOSVersionInfoSize = std::mem::size_of::<OSVERSIONINFOW>() as u32;
-
-        if RtlGetVersion(&mut version_info).is_ok() {
-            // Windows 7 is version 6.1
-            println!(
-                "Windows version: {}.{}",
-                version_info.dwMajorVersion, version_info.dwMinorVersion
-            );
-            return version_info.dwMajorVersion == 6 && version_info.dwMinorVersion == 1;
-        }
-    }
-    false
 }
 
 fn execute(path: PathBuf, args: Vec<String>, _ui: bool) {
@@ -148,18 +114,12 @@ fn execute(path: PathBuf, args: Vec<String>, _ui: bool) {
             cmd.env(SET_FOREGROUND_WINDOW_ENV_KEY, "1");
         }
     }
-
-    cmd.env(APPNAME_RUNTIME_ENV_KEY, exe_name);
-    if use_null_stdio() {
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-    } else {
-        cmd.stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
-    }
-    let _child = cmd.spawn();
+    let _child = cmd
+        .env(APPNAME_RUNTIME_ENV_KEY, exe_name)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn();
 
     #[cfg(windows)]
     if _ui {
@@ -186,7 +146,8 @@ fn main() {
         }
         i += 1;
     }
-    let click_setup = args.is_empty() && arg_exe.to_lowercase().ends_with("install.exe");
+    // MouseMux V2.1: Never trigger install mode - user will handle installation
+    // Installation is managed externally by MouseMux launcher
     let quick_support = args.is_empty() && arg_exe.to_lowercase().ends_with("qs.exe");
 
     let mut ui = false;
@@ -194,13 +155,12 @@ fn main() {
     if let Some(exe) = setup(
         reader,
         None,
-        click_setup || args.contains(&"--silent-install".to_owned()),
+        args.contains(&"--silent-install".to_owned()),  // Removed click_setup from condition
         &args,
         &mut ui,
     ) {
-        if click_setup {
-            args = vec!["--install".to_owned()];
-        } else if quick_support {
+        // No longer checking click_setup - install mode disabled
+        if quick_support {
             args = vec!["--quick_support".to_owned()];
         }
         execute(exe, args, ui);
@@ -208,7 +168,7 @@ fn main() {
 }
 
 #[cfg(windows)]
-mod win {
+mod windows {
     use std::{fs, os::windows::process::CommandExt, path::Path, process::Command};
 
     // Used for privacy mode(magnifier impl).

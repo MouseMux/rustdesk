@@ -2,8 +2,6 @@
 use super::rdp_input::client::{RdpInputKeyboard, RdpInputMouse};
 use super::*;
 use crate::input::*;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use crate::whiteboard;
 #[cfg(target_os = "macos")]
 use dispatch::Queue;
 use enigo::{Enigo, Key, KeyboardControllable, MouseButton, MouseControllable};
@@ -204,7 +202,6 @@ impl LockModesHandler {
         }
 
         let mut num_lock_changed = false;
-        #[allow(unused)]
         let mut event_num_enabled = false;
         if is_numpad_key {
             let local_num_enabled = en.get_key_state(enigo::Key::NumLock);
@@ -447,6 +444,53 @@ lazy_static::lazy_static! {
     static ref LATEST_SYS_CURSOR_POS: Arc<Mutex<(Option<Instant>, (i32, i32))>> = Arc::new(Mutex::new((None, (INVALID_CURSOR_POS, INVALID_CURSOR_POS))));
 }
 static EXITING: AtomicBool = AtomicBool::new(false);
+
+// MouseMux V2.1 integration helper functions
+#[cfg(windows)]
+pub fn sync_mousemux_ids(conn_id: i32) {
+    log::info!(
+        "MouseMux v2.1 protocol: sync_mousemux_ids() called for conn_id {}",
+        conn_id
+    );
+
+    if let Ok(mut enigo) = ENIGO.lock() {
+        // Get IDs for this specific connection
+        let (mouse_id, keyboard_id) = match crate::platform::windows_mousemux::get_ids_for_connection(conn_id) {
+            Some((m, k)) => (Some(m), Some(k)),
+            None => (None, None),
+        };
+
+        log::info!(
+            "MouseMux v2.1 protocol: Retrieved IDs from windows_mousemux for conn_id {}: mouse={:?}, keyboard={:?}",
+            conn_id,
+            mouse_id,
+            keyboard_id
+        );
+
+        // Update main process Enigo instance
+        enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
+        log::info!(
+            "MouseMux v2.1 protocol: Updated MAIN PROCESS Enigo instance for conn_id {}",
+            conn_id
+        );
+
+        // Send IDs to portable service via IPC
+        crate::portable_service::client::send_mousemux_ids(conn_id, mouse_id, keyboard_id);
+    } else {
+        log::error!(
+            "MouseMux v2.1 protocol: Failed to lock ENIGO mutex for conn_id {}",
+            conn_id
+        );
+    }
+}
+
+// Public helper for portable service to update its Enigo instance
+#[cfg(windows)]
+pub fn set_enigo_mousemux_ids(conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+    if let Ok(mut enigo) = ENIGO.lock() {
+        enigo.set_mousemux_ids(conn_id, mouse_id, keyboard_id);
+    }
+}
 
 const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
 // Actual diff of (x,y) is (1,1) here. But 5 may be tolerant.
@@ -701,25 +745,18 @@ fn get_modifier_state(key: Key, en: &mut Enigo) -> bool {
 }
 
 #[allow(unreachable_code)]
-pub fn handle_mouse(
-    evt: &MouseEvent,
-    conn: i32,
-    username: String,
-    argb: u32,
-    simulate: bool,
-    show_cursor: bool,
-) {
+pub fn handle_mouse(evt: &MouseEvent, conn: i32) {
     #[cfg(target_os = "macos")]
     {
         // having GUI (--server has tray, it is GUI too), run main GUI thread, otherwise crash
         let evt = evt.clone();
-        QUEUE.exec_async(move || handle_mouse_(&evt, conn, username, argb, simulate, show_cursor));
+        QUEUE.exec_async(move || handle_mouse_(&evt, conn));
         return;
     }
     #[cfg(windows)]
-    crate::portable_service::client::handle_mouse(evt, conn, username, argb, simulate, show_cursor);
+    crate::portable_service::client::handle_mouse(evt, conn);
     #[cfg(not(windows))]
-    handle_mouse_(evt, conn, username, argb, simulate, show_cursor);
+    handle_mouse_(evt, conn);
 }
 
 // to-do: merge handle_mouse and handle_pointer
@@ -989,24 +1026,7 @@ pub fn handle_pointer_(evt: &PointerDeviceEvent, conn: i32) {
     }
 }
 
-pub fn handle_mouse_(
-    evt: &MouseEvent,
-    conn: i32,
-    _username: String,
-    _argb: u32,
-    simulate: bool,
-    _show_cursor: bool,
-) {
-    if simulate {
-        handle_mouse_simulation_(evt, conn);
-    }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if _show_cursor {
-        handle_mouse_show_cursor_(evt, conn, _username, _argb);
-    }
-}
-
-pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
+pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     if !active_mouse_(conn) {
         return;
     }
@@ -1020,6 +1040,10 @@ pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
     let buttons = evt.mask >> 3;
     let evt_type = evt.mask & 0x7;
     let mut en = ENIGO.lock().unwrap();
+
+    // Set current connection ID for MouseMux V2.1
+    #[cfg(windows)]
+    en.set_current_conn_id(Some(conn));
     #[cfg(target_os = "macos")]
     en.set_ignore_flags(enigo_ignore_flags());
     #[cfg(not(target_os = "macos"))]
@@ -1149,41 +1173,6 @@ pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub fn handle_mouse_show_cursor_(evt: &MouseEvent, conn: i32, username: String, argb: u32) {
-    let buttons = evt.mask >> 3;
-    let evt_type = evt.mask & 0x7;
-    match evt_type {
-        MOUSE_TYPE_MOVE => {
-            whiteboard::update_whiteboard(
-                whiteboard::get_key_cursor(conn),
-                whiteboard::CustomEvent::Cursor(whiteboard::Cursor {
-                    x: evt.x as _,
-                    y: evt.y as _,
-                    argb,
-                    btns: 0,
-                    text: username,
-                }),
-            );
-        }
-        MOUSE_TYPE_UP => {
-            if buttons == MOUSE_BUTTON_LEFT {
-                whiteboard::update_whiteboard(
-                    whiteboard::get_key_cursor(conn),
-                    whiteboard::CustomEvent::Cursor(whiteboard::Cursor {
-                        x: evt.x as _,
-                        y: evt.y as _,
-                        argb,
-                        btns: buttons,
-                        text: username,
-                    }),
-                );
-            }
-        }
-        _ => {}
-    }
-}
-
 #[cfg(target_os = "windows")]
 fn handle_scale(scale: i32) {
     let mut en = ENIGO.lock().unwrap();
@@ -1247,19 +1236,19 @@ pub async fn lock_screen() {
 
 #[inline]
 #[cfg(target_os = "linux")]
-pub fn handle_key(evt: &KeyEvent) {
+pub fn handle_key(evt: &KeyEvent, _conn: i32) {
     handle_key_(evt);
 }
 
 #[inline]
 #[cfg(target_os = "windows")]
-pub fn handle_key(evt: &KeyEvent) {
-    crate::portable_service::client::handle_key(evt);
+pub fn handle_key(evt: &KeyEvent, conn: i32) {
+    crate::portable_service::client::handle_key(evt, conn);
 }
 
 #[inline]
 #[cfg(target_os = "macos")]
-pub fn handle_key(evt: &KeyEvent) {
+pub fn handle_key(evt: &KeyEvent, _conn: i32) {
     // having GUI, run main GUI thread, otherwise crash
     let evt = evt.clone();
     QUEUE.exec_async(move || handle_key_(&evt));

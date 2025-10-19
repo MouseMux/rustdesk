@@ -68,8 +68,11 @@ fn install_android_deps() {
     }
     path.push(target);
     println!(
-        "cargo:rustc-link-search={}",
-        path.join("lib").to_str().unwrap()
+        "{}",
+        format!(
+            "cargo:rustc-link-search={}",
+            path.join("lib").to_str().unwrap()
+        )
     );
     println!("cargo:rustc-link-lib=ndk_compat");
     println!("cargo:rustc-link-lib=oboe");
@@ -79,6 +82,11 @@ fn install_android_deps() {
 
 fn main() {
     hbb_common::gen_version();
+
+    // Set build timestamp for logging
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    println!("cargo:rustc-env=BUILD_TIMESTAMP={}", timestamp);
+
     install_android_deps();
     #[cfg(all(windows, feature = "inline"))]
     build_manifest();

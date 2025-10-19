@@ -1,0 +1,139 @@
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:251:17
+    |
+251 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:283:17
+    |
+283 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+
+warning: `hbb_common` (lib) generated 2 warnings
+    Finished release [optimized] target(s) in 3.51s
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:251:17
+    |
+251 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `static_mut_refs`
+   --> libs\hbb_common\src\fingerprint.rs:283:17
+    |
+283 |         #[allow(static_mut_refs)]
+    |                 ^^^^^^^^^^^^^^^
+
+warning: `hbb_common` (lib) generated 2 warnings
+warning: `hbb_common` (lib) generated 2 warnings (2 duplicates)
+warning: unused import: `self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE`
+   --> O:\RustDesk-build\rustdesk-flutter\target\release\build\scrap-20c911187b02647f\out/vpx_ffi.rs:911:9
+    |
+911 | pub use self::vp9e_temporal_layering_mode as VP9E_TEMPORAL_LAYERING_MODE;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: `scrap` (lib) generated 1 warning (run `cargo fix --lib -p scrap` to apply 1 suggestion)
+   Compiling rustdesk v1.4.3 (O:\RustDesk-build\rustdesk-flutter)
+warning: the item `System` is imported redundantly
+    --> src\platform\windows.rs:3106:9
+     |
+17   |     sysinfo::{Pid, System},
+     |                    ------ the item `System` is already imported here
+...
+3106 |     use hbb_common::sysinfo::System;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1780:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1780 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: the item `ToSocketAddrs` is imported redundantly
+    --> src\common.rs:1804:9
+     |
+4    |     net::{SocketAddr, ToSocketAddrs},
+     |                       ------------- the item `ToSocketAddrs` is already imported here
+...
+1804 |     use std::net::ToSocketAddrs;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `MOUSE_BUTTON_LEFT`, `MOUSE_TYPE_DOWN`, `MOUSE_TYPE_UP`, `MOUSE_TYPE_WHEEL`
+ --> src\ui_session_interface.rs:3:13
+  |
+3 |     input::{MOUSE_BUTTON_LEFT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP, MOUSE_TYPE_WHEEL},
+  |             ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: use of deprecated function `hbb_common::base64::encode`: Use Engine::encode
+   --> src\hbbs_http\sync.rs:187:52
+    |
+187 |                         hash = hbb_common::base64::encode(&res[..]);
+    |                                                    ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: variable does not need to be mutable
+  --> src\tray.rs:60:9
+   |
+60 |     let mut event_loop = EventLoopBuilder::new().build();
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+warning: fields `x` and `y` are never read
+   --> src\server\input_service.rs:105:5
+    |
+102 | struct Input {
+    |        ----- fields in this struct
+...
+105 |     x: i32,
+    |     ^
+106 |     y: i32,
+    |     ^
+    |
+    = note: `Input` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` on by default
+
+warning: constant `MOUSE_MOVE_PROTECTION_TIMEOUT` is never used
+   --> src\server\input_service.rs:451:7
+    |
+451 | const MOUSE_MOVE_PROTECTION_TIMEOUT: Duration = Duration::from_millis(1_000);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MOUSE_ACTIVE_DISTANCE` is never used
+   --> src\server\input_service.rs:453:7
+    |
+453 | const MOUSE_ACTIVE_DISTANCE: i32 = 5;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_last_input_cursor_pos` is never used
+   --> src\server\input_service.rs:901:4
+    |
+901 | fn get_last_input_cursor_pos() -> (i32, i32) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `rustdesk` (lib) generated 10 warnings (run `cargo fix --lib -p rustdesk` to apply 2 suggestions)
+    Finished release [optimized] target(s) in 8m 36s
+
+Building Windows application...                                   277.9s
+√ Built build\windows\x64\runner\Release\rustdesk.exe
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: brotli in c:\users\developer\appdata\roaming\python\python313\site-packages (from -r requirements.txt (line 1)) (1.1.0)
+'python3' is not recognized as an internal or external command,
+operable program or batch file.
+Error occurred when executing: `python3 ./generate.py -f ../../flutter/build/windows/x64/runner/Release/ -o . -e ../../flutter/build/windows/x64/runner/Release//rustdesk.exe`. Exiting.
+features: ['flutter']
+False

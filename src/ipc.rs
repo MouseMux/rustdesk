@@ -177,12 +177,13 @@ pub enum DataPortableService {
     Ping,
     Pong,
     ConnCount(Option<usize>),
-    Mouse((Vec<u8>, i32, String, u32, bool, bool)),
+    Mouse((Vec<u8>, i32)),
     Pointer((Vec<u8>, i32)),
     Key(Vec<u8>),
     RequestStart,
     WillClose,
     CmShowElevation(bool),
+    MouseMuxIds(i32, Option<u32>, Option<u32>), // (conn_id, mouse_id, keyboard_id)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -271,7 +272,7 @@ pub enum Data {
     CheckHwcodec,
     #[cfg(feature = "flutter")]
     VideoConnCount(Option<usize>),
-    // Although the key is not necessary, it is used to avoid hardcoding the key.
+    // Although the key is not neccessary, it is used to avoid hardcoding the key.
     WaylandScreencastRestoreToken((String, String)),
     HwCodecConfig(Option<String>),
     RemoveTrustedDevices(Vec<Bytes>),
@@ -289,8 +290,6 @@ pub enum Data {
     #[cfg(target_os = "windows")]
     PortForwardSessionCount(Option<usize>),
     SocksWs(Option<Box<(Option<config::Socks5Server>, String)>>),
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    Whiteboard((String, crate::whiteboard::CustomEvent)),
 }
 
 #[tokio::main(flavor = "current_thread")]
