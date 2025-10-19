@@ -335,6 +335,21 @@ div.install-me, div.trust-me {
     background: linear-gradient(left,#e242bc,#f4727c);
 }
 
+div.mousemux-banner {
+    margin-top: 0.5em;
+    padding: 20px;
+    color: color(text);
+    background: color(bg);
+    border: 2px solid #ff8c00;
+    border-radius: 8px;
+    text-align: center;
+}
+
+div.mousemux-banner img {
+    max-width: 100%;
+    height: auto;
+}
+
 div.trust-me > div:nth-child(1),
 div.install-me > div:nth-child(1) {
     font-size: 1.2em;

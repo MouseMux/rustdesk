@@ -1,5 +1,5 @@
 use self::winapi::ctypes::c_int;
-use self::winapi::shared::{basetsd::ULONG_PTR, minwindef::*, windef::*};
+use self::winapi::shared::{basetsd::{ULONG_PTR, DWORD_PTR}, minwindef::*, windef::*};
 use self::winapi::um::winbase::*;
 use self::winapi::um::winuser::*;
 use winapi;
@@ -7,20 +7,35 @@ use winapi;
 use crate::win::keycodes::*;
 use crate::{Key, KeyboardControllable, MouseButton, MouseControllable};
 use std::mem::*;
+use std::collections::HashMap;
 
 extern "system" {
     pub fn GetLastError() -> DWORD;
 }
 
 /// The main struct for handling the event emitting
-#[derive(Default)]
-pub struct Enigo;
+pub struct Enigo {
+    // HashMap: conn_id -> (mouse_id, keyboard_id)
+    mousemux_ids: HashMap<i32, (ULONG_PTR, ULONG_PTR)>,
+    // Current connection ID being processed (for looking up IDs during input injection)
+    current_conn_id: Option<i32>,
+}
+
+impl Default for Enigo {
+    fn default() -> Self {
+        Self {
+            mousemux_ids: HashMap::new(),
+            current_conn_id: None,
+        }
+    }
+}
+
 static mut LAYOUT: HKL = std::ptr::null_mut();
 
 /// The dwExtraInfo value in keyboard and mouse structure that used in SendInput()
 pub const ENIGO_INPUT_EXTRA_VALUE: ULONG_PTR = 100;
 
-fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32) -> DWORD {
+fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32, extra_info: ULONG_PTR) -> DWORD {
     let mut u = INPUT_u::default();
     unsafe {
         *u.mi_mut() = MOUSEINPUT {
@@ -29,7 +44,7 @@ fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32) -> DWORD {
             mouseData: data,
             dwFlags: flags,
             time: 0,
-            dwExtraInfo: ENIGO_INPUT_EXTRA_VALUE,
+            dwExtraInfo: extra_info,
         };
     }
     let mut input = INPUT {
@@ -39,7 +54,7 @@ fn mouse_event(flags: u32, data: u32, dx: i32, dy: i32) -> DWORD {
     unsafe { SendInput(1, &mut input as LPINPUT, size_of::<INPUT>() as c_int) }
 }
 
-fn keybd_event(mut flags: u32, vk: u16, scan: u16) -> DWORD {
+fn keybd_event(mut flags: u32, vk: u16, scan: u16, extra_info: ULONG_PTR) -> DWORD {
     let mut scan = scan;
     unsafe {
         // https://github.com/rustdesk/rustdesk/issues/366
@@ -65,7 +80,7 @@ fn keybd_event(mut flags: u32, vk: u16, scan: u16) -> DWORD {
             wScan: scan,
             dwFlags: flags,
             time: 0,
-            dwExtraInfo: ENIGO_INPUT_EXTRA_VALUE,
+            dwExtraInfo: extra_info,
         };
     }
     let mut inputs = [INPUT {
@@ -126,6 +141,7 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_move_to(&mut self, x: i32, y: i32) {
+        let extra_info = self.get_mouse_extra_info();
         mouse_event(
             MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
             0,
@@ -133,14 +149,17 @@ impl MouseControllable for Enigo {
                 / unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) },
             (y - unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) }) * 65535
                 / unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) },
+            extra_info,
         );
     }
 
     fn mouse_move_relative(&mut self, x: i32, y: i32) {
-        mouse_event(MOUSEEVENTF_MOVE, 0, x, y);
+        let extra_info = self.get_mouse_extra_info();
+        mouse_event(MOUSEEVENTF_MOVE, 0, x, y, extra_info);
     }
 
     fn mouse_down(&mut self, button: MouseButton) -> crate::ResultType {
+        let extra_info = self.get_mouse_extra_info();
         let res = mouse_event(
             match button {
                 MouseButton::Left => MOUSEEVENTF_LEFTDOWN,
@@ -160,6 +179,7 @@ impl MouseControllable for Enigo {
             },
             0,
             0,
+            extra_info,
         );
         if res == 0 {
             let err = get_error();
@@ -171,6 +191,7 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_up(&mut self, button: MouseButton) {
+        let extra_info = self.get_mouse_extra_info();
         mouse_event(
             match button {
                 MouseButton::Left => MOUSEEVENTF_LEFTUP,
@@ -190,6 +211,7 @@ impl MouseControllable for Enigo {
             },
             0,
             0,
+            extra_info,
         );
     }
 
@@ -199,11 +221,13 @@ impl MouseControllable for Enigo {
     }
 
     fn mouse_scroll_x(&mut self, length: i32) {
-        mouse_event(MOUSEEVENTF_HWHEEL, length as _, 0, 0);
+        let extra_info = self.get_mouse_extra_info();
+        mouse_event(MOUSEEVENTF_HWHEEL, length as _, 0, 0, extra_info);
     }
 
     fn mouse_scroll_y(&mut self, length: i32) {
-        mouse_event(MOUSEEVENTF_WHEEL, length as _, 0, 0);
+        let extra_info = self.get_mouse_extra_info();
+        mouse_event(MOUSEEVENTF_WHEEL, length as _, 0, 0, extra_info);
     }
 }
 
@@ -242,11 +266,13 @@ impl KeyboardControllable for Enigo {
 
     fn key_click(&mut self, key: Key) {
         let vk = self.key_to_keycode(key);
-        keybd_event(0, vk, 0);
-        keybd_event(KEYEVENTF_KEYUP, vk, 0);
+        let extra_info = self.get_keyboard_extra_info();
+        keybd_event(0, vk, 0, extra_info);
+        keybd_event(KEYEVENTF_KEYUP, vk, 0, extra_info);
     }
 
     fn key_down(&mut self, key: Key) -> crate::ResultType {
+        let extra_info = self.get_keyboard_extra_info();
         match &key {
             Key::Layout(c) => {
                 // to-do: dup code
@@ -263,7 +289,7 @@ impl KeyboardControllable for Enigo {
                         }
                     }
 
-                    let res = keybd_event(0, vk, 0);
+                    let res = keybd_event(0, vk, 0, extra_info);
                     let err = if res == 0 { get_error() } else { "".to_owned() };
 
                     for pos in 0..mod_len {
@@ -285,7 +311,7 @@ impl KeyboardControllable for Enigo {
                 if code == 0 || code == 65535 {
                     return Err("".into());
                 }
-                let res = keybd_event(0, code, 0);
+                let res = keybd_event(0, code, 0, extra_info);
                 if res == 0 {
                     let err = get_error();
                     if !err.is_empty() {
@@ -298,7 +324,8 @@ impl KeyboardControllable for Enigo {
     }
 
     fn key_up(&mut self, key: Key) {
-        keybd_event(KEYEVENTF_KEYUP, self.key_to_keycode(key), 0);
+        let extra_info = self.get_keyboard_extra_info();
+        keybd_event(KEYEVENTF_KEYUP, self.key_to_keycode(key), 0, extra_info);
     }
 
     fn get_key_state(&mut self, key: Key) -> bool {
@@ -312,6 +339,67 @@ impl KeyboardControllable for Enigo {
 }
 
 impl Enigo {
+    /// Get the extra info value to use for input injection
+    /// Returns MouseMux mouse ID for current connection if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
+    fn get_mouse_extra_info(&self) -> ULONG_PTR {
+        if let Some(conn_id) = self.current_conn_id {
+            if let Some((mouse_id, _)) = self.mousemux_ids.get(&conn_id) {
+                log::trace!("MouseMux v2.1 protocol: get_mouse_extra_info() - Using ID 0x{:X} for conn_id {}", *mouse_id, conn_id);
+                return *mouse_id;
+            } else {
+                log::trace!("MouseMux v2.1 protocol: get_mouse_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
+            }
+        } else {
+            log::trace!("MouseMux v2.1 protocol: get_mouse_extra_info() - No current_conn_id set, using default 100");
+        }
+        ENIGO_INPUT_EXTRA_VALUE
+    }
+
+    /// Returns MouseMux keyboard ID for current connection if assigned, otherwise ENIGO_INPUT_EXTRA_VALUE
+    fn get_keyboard_extra_info(&self) -> ULONG_PTR {
+        if let Some(conn_id) = self.current_conn_id {
+            if let Some((_, keyboard_id)) = self.mousemux_ids.get(&conn_id) {
+                log::trace!("MouseMux v2.1 protocol: get_keyboard_extra_info() - Using ID 0x{:X} for conn_id {}", *keyboard_id, conn_id);
+                return *keyboard_id;
+            } else {
+                log::trace!("MouseMux v2.1 protocol: get_keyboard_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
+            }
+        } else {
+            log::trace!("MouseMux v2.1 protocol: get_keyboard_extra_info() - No current_conn_id set, using default 100");
+        }
+        ENIGO_INPUT_EXTRA_VALUE
+    }
+
+    /// Set MouseMux IDs from V2.1 protocol
+    /// Called by input_service when IDs are received from MouseMux
+    /// conn_id: The connection ID for this client
+    /// mouse_id: Assigned mouse ID for this connection (or None)
+    /// keyboard_id: Assigned keyboard ID for this connection (or None)
+    pub fn set_mousemux_ids(&mut self, conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
+        if let (Some(m_id), Some(k_id)) = (mouse_id, keyboard_id) {
+            self.mousemux_ids.insert(conn_id, (m_id as ULONG_PTR, k_id as ULONG_PTR));
+            log::info!("MouseMux v2.1 protocol: Enigo::set_mousemux_ids() - IDs set for conn_id {}: Mouse=0x{:X} ({}), Keyboard=0x{:X} ({})",
+                conn_id, m_id, m_id, k_id, k_id);
+            log::info!("MouseMux v2.1 protocol: Enigo HashMap now contains {} entries", self.mousemux_ids.len());
+        } else {
+            // Remove IDs if either is None
+            let had_entry = self.mousemux_ids.remove(&conn_id).is_some();
+            if had_entry {
+                log::info!("MouseMux v2.1 protocol: Enigo::set_mousemux_ids() - IDs cleared for conn_id {} (reset to 100)", conn_id);
+            } else {
+                log::info!("MouseMux v2.1 protocol: Enigo::set_mousemux_ids() - No IDs to clear for conn_id {} (already None)", conn_id);
+            }
+            log::info!("MouseMux v2.1 protocol: Enigo HashMap now contains {} entries", self.mousemux_ids.len());
+        }
+    }
+
+    /// Set the current connection ID for input injection
+    /// Must be called before injecting input for a specific connection
+    pub fn set_current_conn_id(&mut self, conn_id: Option<i32>) {
+        self.current_conn_id = conn_id;
+        log::trace!("MouseMux v2.1 protocol: Current conn_id set to {:?}", conn_id);
+    }
+
     /// Gets the (width, height) of the main display in screen coordinates
     /// (pixels).
     ///
@@ -351,11 +439,13 @@ impl Enigo {
     }
 
     fn unicode_key_down(&self, unicode_char: u16) {
-        keybd_event(KEYEVENTF_UNICODE, 0, unicode_char);
+        let extra_info = self.get_keyboard_extra_info();
+        keybd_event(KEYEVENTF_UNICODE, 0, unicode_char, extra_info);
     }
 
     fn unicode_key_up(&self, unicode_char: u16) {
-        keybd_event(KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, unicode_char);
+        let extra_info = self.get_keyboard_extra_info();
+        keybd_event(KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, unicode_char, extra_info);
     }
 
     fn key_to_keycode(&self, key: Key) -> u16 {

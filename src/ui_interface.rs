@@ -1527,3 +1527,30 @@ pub fn clear_trusted_devices() {
 pub fn max_encrypt_len() -> usize {
     hbb_common::config::ENCRYPT_MAX_LEN
 }
+
+// MouseMux V2 functions - Protocol V2 is automatic, no manual toggle needed
+#[cfg(windows)]
+pub fn get_mousemux_enabled() -> String {
+    // V2 protocol is always enabled if IDs are currently assigned
+    if crate::platform::windows_mousemux::has_ids() {
+        "Y".to_owned()
+    } else {
+        "".to_owned()
+    }
+}
+
+#[cfg(windows)]
+pub fn set_mousemux_enabled(_enabled: String) {
+    // V2 protocol is automatic - no manual enable/disable
+    // IDs are assigned when client connects and released when client disconnects
+    log::info!("MouseMux V2: Manual toggle not supported - protocol is automatic");
+}
+
+#[cfg(not(windows))]
+pub fn get_mousemux_enabled() -> String {
+    "".to_owned()
+}
+
+#[cfg(not(windows))]
+pub fn set_mousemux_enabled(_enabled: String) {
+}
