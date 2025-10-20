@@ -6216,13 +6216,14 @@ dependencies = [
 
 [[package]]
 name = "rustdesk-portable-packer"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "brotli",
  "dirs 5.0.1",
  "md5",
  "native-windows-gui",
  "winapi 0.3.9",
+ "windows 0.61.1",
  "winres",
 ]
 
