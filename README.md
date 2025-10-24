@@ -20,18 +20,6 @@ This RustDesk build integrates seamlessly with the **MouseMux V2.2 protocol**, p
 - **User Count Display** - Real-time display of connected users in the Flutter UI
 - **Zero Configuration** - Works out-of-the-box when MouseMux is running on the host machine
 
-## How It Works
-
-When you connect to a Windows machine running MouseMux:
-
-1. **RustDesk requests a unique ID** from MouseMux via Windows messaging (WM_APP+30)
-2. **MouseMux assigns cursor IDs** (mouse and keyboard) for this specific connection
-3. **All input events** (mouse movements, clicks, keyboard) are tagged with your connection ID
-4. **Windows processes the input** as if from independent hardware devices
-5. **On disconnect**, RustDesk releases the IDs back to MouseMux (WM_APP+40)
-
-This architecture allows multiple users to work on the same Windows desktop simultaneously without interfering with each other's cursor positions or input.
-
 ## Use Cases
 
 - **Collaborative Support** - Multiple technicians helping a user simultaneously
@@ -41,14 +29,15 @@ This architecture allows multiple users to work on the same Windows desktop simu
 
 ## Learn More
 
-- **MouseMux Application**: [https://www.mousemux.com/pages/apps/rustdesk](https://www.mousemux.com/pages/apps/rustdesk)
+Visit [www.mousemux.com](https://www.mousemux.com) for more information about MouseMux.
+
 - **Protocol Version**: V2.2 (122)
 - **RustDesk Base Version**: 1.4.3
 - **Build Version**: 1.4.3-mousemux-v2.2
 
-## Download
+## Getting Started
 
-Prebuilt binaries with MouseMux integration are available from the **Releases** section of this repository.
+To use this MouseMux-enabled RustDesk client, download the **MouseMux 2.2.x beta** from [www.mousemux.com](https://www.mousemux.com). The MouseMux application includes this RustDesk client and handles all configuration automatically.
 
 ---
 
