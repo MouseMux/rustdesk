@@ -1,3 +1,63 @@
+# RustDesk MouseMux Edition
+
+<p align="center">
+  <img src="https://www.mousemux.com/images/logo.png" alt="MouseMux Logo" width="200"><br>
+  <b>Multi-User Remote Desktop Solution</b>
+</p>
+
+## What is MouseMux?
+
+This is a **MouseMux-compliant fork** of RustDesk that enables **true multi-user remote desktop access**. MouseMux allows multiple users to connect to a single Windows desktop simultaneously, each with their own independent mouse cursor and input control.
+
+## MouseMux Integration
+
+This RustDesk build integrates seamlessly with the **MouseMux V2.2 protocol**, providing:
+
+- **Per-Connection ID Management** - Each connected user gets a unique cursor ID, allowing simultaneous independent control
+- **Real-Time Synchronization** - Bidirectional communication with the MouseMux application via Windows messaging
+- **Connection Lifecycle Tracking** - Automatic ID assignment on connect and release on disconnect
+- **Multi-User Input Routing** - Modified input handling that routes mouse/keyboard events per connection ID
+- **User Count Display** - Real-time display of connected users in the Flutter UI
+- **Zero Configuration** - Works out-of-the-box when MouseMux is running on the host machine
+
+## How It Works
+
+When you connect to a Windows machine running MouseMux:
+
+1. **RustDesk requests a unique ID** from MouseMux via Windows messaging (WM_APP+30)
+2. **MouseMux assigns cursor IDs** (mouse and keyboard) for this specific connection
+3. **All input events** (mouse movements, clicks, keyboard) are tagged with your connection ID
+4. **Windows processes the input** as if from independent hardware devices
+5. **On disconnect**, RustDesk releases the IDs back to MouseMux (WM_APP+40)
+
+This architecture allows multiple users to work on the same Windows desktop simultaneously without interfering with each other's cursor positions or input.
+
+## Use Cases
+
+- **Collaborative Support** - Multiple technicians helping a user simultaneously
+- **Training Sessions** - Instructor and students working together on one machine
+- **Pair Programming** - Developers collaborating on the same codebase in real-time
+- **Multi-User Demonstrations** - Presenters showing different aspects of software simultaneously
+
+## Learn More
+
+- **MouseMux Application**: [https://www.mousemux.com/pages/apps/rustdesk](https://www.mousemux.com/pages/apps/rustdesk)
+- **Protocol Version**: V2.2 (122)
+- **RustDesk Base Version**: 1.4.3
+- **Build Version**: 1.4.3-mousemux-v2.2
+
+## Download
+
+Prebuilt binaries with MouseMux integration are available from the **Releases** section of this repository.
+
+---
+
+**Note:** This fork is specifically designed to work with MouseMux. For standard RustDesk functionality without multi-user support, please use the [official RustDesk repository](https://github.com/rustdesk/rustdesk).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Original RustDesk README
+
 <p align="center">
   <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
   <a href="#raw-steps-to-build">Build</a> •
@@ -179,4 +239,3 @@ Please ensure that you run these commands from the root of the RustDesk reposito
 ![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
-
