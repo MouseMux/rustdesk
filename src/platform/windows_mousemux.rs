@@ -18,7 +18,7 @@ use winapi::{
     },
 };
 
-// MouseMux Protocol V2.1 Messages
+// MouseMux Protocol V2.2 Messages
 const WM_APP: u32 = 0x8000;
 
 // Messages RustDesk sends to MouseMux
@@ -68,7 +68,7 @@ pub struct MouseMuxConnectionIDs {
     pub keyboard_id: Option<u32>,
 }
 
-/// Global state for MouseMux integration (V2.1)
+/// Global state for MouseMux integration (V2.2)
 pub struct MouseMuxState {
     pub hwnd: Option<SendSyncHwnd>,  // RustDesk's message window handle
     pub connections: HashMap<i32, MouseMuxConnectionIDs>,  // conn_id → IDs
@@ -114,7 +114,7 @@ unsafe extern "system" fn window_proc(
 
     match msg {
         MOUSEMUX_STARTUP_BROADCAST => {  // WM_APP+100 - MouseMux startup broadcast
-            log::info!("MouseMux v2.1 protocol: Received MOUSEMUX_STARTUP_BROADCAST - MouseMux is available");
+            log::info!("MouseMux v2.2 protocol: Received MOUSEMUX_STARTUP_BROADCAST - MouseMux is available");
 
             // Re-register RustDesk with MouseMux
             std::thread::spawn(|| {
@@ -133,7 +133,7 @@ unsafe extern "system" fn window_proc(
             let mouse_id = lparam as u32;
 
             log::info!(
-                "MouseMux v2.1 protocol: Received MOUSEMUX_MOUSE_ID_ASSIGNED - Mouse ID 0x{:X} ({}) for conn_id {}",
+                "MouseMux v2.2 protocol: Received MOUSEMUX_MOUSE_ID_ASSIGNED - Mouse ID 0x{:X} ({}) for conn_id {}",
                 mouse_id,
                 mouse_id,
                 conn_id
@@ -154,7 +154,7 @@ unsafe extern "system" fn window_proc(
                 entry.mouse_id = Some(mouse_id);
 
                 log::info!(
-                    "MouseMux v2.1 protocol: Stored mouse ID 0x{:X} in HashMap for conn_id {}",
+                    "MouseMux v2.2 protocol: Stored mouse ID 0x{:X} in HashMap for conn_id {}",
                     mouse_id,
                     conn_id
                 );
@@ -162,7 +162,7 @@ unsafe extern "system" fn window_proc(
 
             // Sync to Enigo
             log::info!(
-                "MouseMux v2.1 protocol: Calling sync_mousemux_ids() for conn_id {} after receiving mouse ID",
+                "MouseMux v2.2 protocol: Calling sync_mousemux_ids() for conn_id {} after receiving mouse ID",
                 conn_id
             );
             crate::server::input_service::sync_mousemux_ids(conn_id);
@@ -174,7 +174,7 @@ unsafe extern "system" fn window_proc(
             let keyboard_id = lparam as u32;
 
             log::info!(
-                "MouseMux v2.1 protocol: Received MOUSEMUX_KEYBOARD_ID_ASSIGNED - Keyboard ID 0x{:X} ({}) for conn_id {}",
+                "MouseMux v2.2 protocol: Received MOUSEMUX_KEYBOARD_ID_ASSIGNED - Keyboard ID 0x{:X} ({}) for conn_id {}",
                 keyboard_id,
                 keyboard_id,
                 conn_id
@@ -195,7 +195,7 @@ unsafe extern "system" fn window_proc(
                 entry.keyboard_id = Some(keyboard_id);
 
                 log::info!(
-                    "MouseMux v2.1 protocol: Stored keyboard ID 0x{:X} in HashMap for conn_id {}",
+                    "MouseMux v2.2 protocol: Stored keyboard ID 0x{:X} in HashMap for conn_id {}",
                     keyboard_id,
                     conn_id
                 );
@@ -203,7 +203,7 @@ unsafe extern "system" fn window_proc(
 
             // Sync to Enigo
             log::info!(
-                "MouseMux v2.1 protocol: Calling sync_mousemux_ids() for conn_id {} after receiving keyboard ID",
+                "MouseMux v2.2 protocol: Calling sync_mousemux_ids() for conn_id {} after receiving keyboard ID",
                 conn_id
             );
             crate::server::input_service::sync_mousemux_ids(conn_id);
@@ -215,7 +215,7 @@ unsafe extern "system" fn window_proc(
             let mousemux_total = lparam as usize;
 
             log::info!(
-                "MouseMux v2.1 protocol: MOUSEMUX_USER_ADD - User {} added, MouseMux total: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_USER_ADD - User {} added, MouseMux total: {}",
                 user_id,
                 mousemux_total
             );
@@ -226,7 +226,7 @@ unsafe extern "system" fn window_proc(
             let our_count = get_connected_users_count();
             if our_count != mousemux_total {
                 log::warn!(
-                    "MouseMux v2.1 protocol: User count mismatch after ADD - RustDesk: {}, MouseMux: {}",
+                    "MouseMux v2.2 protocol: User count mismatch after ADD - RustDesk: {}, MouseMux: {}",
                     our_count,
                     mousemux_total
                 );
@@ -239,7 +239,7 @@ unsafe extern "system" fn window_proc(
             let mousemux_total = lparam as usize;
 
             log::info!(
-                "MouseMux v2.1 protocol: MOUSEMUX_USER_REMOVE - User {} removed, MouseMux total: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_USER_REMOVE - User {} removed, MouseMux total: {}",
                 user_id,
                 mousemux_total
             );
@@ -250,7 +250,7 @@ unsafe extern "system" fn window_proc(
             let our_count = get_connected_users_count();
             if our_count != mousemux_total {
                 log::warn!(
-                    "MouseMux v2.1 protocol: User count mismatch after REMOVE - RustDesk: {}, MouseMux: {}",
+                    "MouseMux v2.2 protocol: User count mismatch after REMOVE - RustDesk: {}, MouseMux: {}",
                     our_count,
                     mousemux_total
                 );
@@ -259,7 +259,7 @@ unsafe extern "system" fn window_proc(
         }
 
         MOUSEMUX_EXITING => {  // WM_APP+210 - MouseMux is exiting
-            log::info!("MouseMux v2.1 protocol: MOUSEMUX_EXITING - MouseMux is shutting down, resetting user count");
+            log::info!("MouseMux v2.2 protocol: MOUSEMUX_EXITING - MouseMux is shutting down, resetting user count");
 
             // Reset user count to 0 as safety measure
             {
@@ -271,7 +271,7 @@ unsafe extern "system" fn window_proc(
         }
 
         MOUSEMUX_REQUEST_EXIT => {  // WM_APP+200 - MouseMux requests RustDesk to exit
-            log::info!("MouseMux v2.1 protocol: Received MOUSEMUX_REQUEST_EXIT - Exiting RustDesk");
+            log::info!("MouseMux v2.2 protocol: Received MOUSEMUX_REQUEST_EXIT - Exiting RustDesk");
 
             // Exit the process
             // This will trigger cleanup handlers and gracefully shut down
@@ -336,14 +336,14 @@ fn create_message_window() -> Result<HWND, String> {
             ));
         }
 
-        log::info!("MouseMux v2.1 protocol: Created message window HWND: {:?}", hwnd);
+        log::info!("MouseMux v2.2 protocol: Created message window HWND: {:?}", hwnd);
         Ok(hwnd)
     }
 }
 
 /// Message loop thread - runs GetMessage loop
 fn message_loop_thread(_hwnd: HWND) {
-    log::info!("MouseMux v2.1 protocol: Starting message loop thread");
+    log::info!("MouseMux v2.2 protocol: Starting message loop thread");
 
     unsafe {
         let mut msg: MSG = std::mem::zeroed();
@@ -356,12 +356,12 @@ fn message_loop_thread(_hwnd: HWND) {
         }
     }
 
-    log::info!("MouseMux v2.1 protocol: Message loop thread exiting");
+    log::info!("MouseMux v2.2 protocol: Message loop thread exiting");
 }
 
 /// Initialize MouseMux message window and start background thread
 pub fn init_mousemux_window() -> Result<(), String> {
-    log::info!("MouseMux v2.1 protocol: Initializing message window");
+    log::info!("MouseMux v2.2 protocol: Initializing message window");
 
     // CRITICAL: Window must be created on THE SAME THREAD that runs the message loop!
     // Windows delivers PostMessage to the thread that created the window.
@@ -380,7 +380,7 @@ pub fn init_mousemux_window() -> Result<(), String> {
             }
         };
 
-        log::info!("MouseMux v2.1 protocol: Window created on message loop thread: {:?}", hwnd);
+        log::info!("MouseMux v2.2 protocol: Window created on message loop thread: {:?}", hwnd);
 
         // Store HWND and signal success
         {
@@ -397,7 +397,7 @@ pub fn init_mousemux_window() -> Result<(), String> {
     match rx.recv() {
         Ok(Ok(())) => {
             let hwnd = MOUSEMUX_STATE.lock().unwrap().hwnd;
-            log::info!("MouseMux v2.1 protocol: Message window initialized successfully: {:?}", hwnd);
+            log::info!("MouseMux v2.2 protocol: Message window initialized successfully: {:?}", hwnd);
         }
         Ok(Err(e)) => {
             return Err(e);
@@ -415,7 +415,7 @@ pub fn init_mousemux_window() -> Result<(), String> {
 
 /// Shutdown MouseMux message window
 pub fn shutdown_mousemux_window() {
-    log::info!("MouseMux v2.1 protocol: Shutting down message window");
+    log::info!("MouseMux v2.2 protocol: Shutting down message window");
 
     // Get HWND
     let hwnd = {
@@ -446,7 +446,7 @@ pub fn shutdown_mousemux_window() {
         state.pending_peer_info.clear();
     }
 
-    log::info!("MouseMux v2.1 protocol: Message window shut down");
+    log::info!("MouseMux v2.2 protocol: Message window shut down");
 }
 
 /// Get RustDesk's message window HWND
@@ -469,7 +469,7 @@ pub fn get_ids_for_connection(conn_id: i32) -> Option<(u32, u32)> {
 pub fn clear_ids_for_connection(conn_id: i32) {
     let mut state = MOUSEMUX_STATE.lock().unwrap();
     if state.connections.remove(&conn_id).is_some() {
-        log::info!("MouseMux v2.1 protocol: Cleared IDs for conn_id {}", conn_id);
+        log::info!("MouseMux v2.2 protocol: Cleared IDs for conn_id {}", conn_id);
         drop(state); // Release lock before syncing
 
         // Sync cleared state to Enigo
@@ -531,7 +531,7 @@ pub fn decrement_connected_users() {
 }
 
 // ============================================================================
-// MouseMux Protocol V2.1 - Communication Functions
+// MouseMux Protocol V2.2 - Communication Functions
 // ============================================================================
 
 /// Log outgoing Windows message
@@ -585,7 +585,7 @@ pub fn notify_startup() -> bool {
     let rustdesk_hwnd = match get_rustdesk_hwnd() {
         Some(hwnd) => hwnd,
         None => {
-            log::warn!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - Cannot notify, RustDesk window not created yet");
+            log::warn!("MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_STARTUP - Cannot notify, RustDesk window not created yet");
             return false;
         }
     };
@@ -593,7 +593,7 @@ pub fn notify_startup() -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - MouseMux window not found");
+            log::info!("MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_STARTUP - MouseMux window not found");
             return false;
         }
     };
@@ -608,13 +608,13 @@ pub fn notify_startup() -> bool {
 
         if result == 0 {
             log::error!(
-                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - Failed to post message, error: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_STARTUP - Failed to post message, error: {}",
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_STARTUP - Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
+                "MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_STARTUP - Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
                 mousemux_hwnd,
                 RUSTDESK_VERSION,
                 rustdesk_hwnd
@@ -631,7 +631,7 @@ pub fn notify_shutdown() -> bool {
     let rustdesk_hwnd = match get_rustdesk_hwnd() {
         Some(hwnd) => hwnd,
         None => {
-            log::warn!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - No RustDesk window");
+            log::warn!("MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - No RustDesk window");
             return false;
         }
     };
@@ -639,7 +639,7 @@ pub fn notify_shutdown() -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - MouseMux window not found");
+            log::info!("MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - MouseMux window not found");
             return false;
         }
     };
@@ -654,13 +654,13 @@ pub fn notify_shutdown() -> bool {
 
         if result == 0 {
             log::error!(
-                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - Failed to post message, error: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - Failed to post message, error: {}",
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "MouseMux v2.1 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
+                "MouseMux v2.2 protocol: MOUSEMUX_NOTIFY_SHUTDOWN - Posted to MouseMux window {:?} (version={}, our_hwnd={:?})",
                 mousemux_hwnd,
                 RUSTDESK_VERSION,
                 rustdesk_hwnd
@@ -703,14 +703,14 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
             })
             .peer_info = peer_info.to_string();  // Update peer_info if entry already exists
 
-        log::info!("MouseMux v2.1 protocol: Registered connection {} with peer_info '{}' in HashMap", conn_id, peer_info);
+        log::info!("MouseMux v2.2 protocol: Registered connection {} with peer_info '{}' in HashMap", conn_id, peer_info);
     }
 
     // Now check if MouseMux is running
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("MouseMux v2.1 protocol: MouseMux window not found, connection {} tracked for later", conn_id);
+            log::info!("MouseMux v2.2 protocol: MouseMux window not found, connection {} tracked for later", conn_id);
             return false;  // Connection is tracked, but can't send messages yet
         }
     };
@@ -726,7 +726,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
 
         if result == 0 {
             log::error!(
-                "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_CONNECTION - Failed to post for conn_id {}, error: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_REQUEST_CONNECTION - Failed to post for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
@@ -734,7 +734,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_CONNECTION - Posted to MouseMux window {:?} for conn_id {} (protocol={})",
+            "MouseMux v2.2 protocol: MOUSEMUX_REQUEST_CONNECTION - Posted to MouseMux window {:?} for conn_id {} (protocol={})",
             mousemux_hwnd,
             conn_id,
             PROTOCOL_VERSION
@@ -751,7 +751,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
 
             if result == 0 {
                 log::error!(
-                    "MouseMux v2.1 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post char for conn_id {}, error: {}",
+                    "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post char for conn_id {}, error: {}",
                     conn_id,
                     std::io::Error::last_os_error()
                 );
@@ -769,7 +769,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
 
         if result == 0 {
             log::error!(
-                "MouseMux v2.1 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post null for conn_id {}, error: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post null for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
@@ -777,7 +777,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "MouseMux v2.1 protocol: MOUSEMUX_SET_CONNECTION_NAME - Posted peer info '{}' for conn_id {} ({} chars + null)",
+            "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Posted peer info '{}' for conn_id {} ({} chars + null)",
             peer_info,
             conn_id,
             peer_info.len()
@@ -788,7 +788,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         let rustdesk_hwnd = match get_rustdesk_hwnd() {
             Some(hwnd) => hwnd as LPARAM,
             None => {
-                log::error!("MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - No RustDesk window for conn_id {}", conn_id);
+                log::error!("MouseMux v2.2 protocol: MOUSEMUX_REQUEST_IDS - No RustDesk window for conn_id {}", conn_id);
                 return false;
             }
         };
@@ -802,7 +802,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
 
         if result == 0 {
             log::error!(
-                "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - Failed to post for conn_id {}, error: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_REQUEST_IDS - Failed to post for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
@@ -810,7 +810,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         }
 
         log::info!(
-            "MouseMux v2.1 protocol: MOUSEMUX_REQUEST_IDS - Posted to MouseMux window {:?} for conn_id {} (rustdesk_hwnd={:?})",
+            "MouseMux v2.2 protocol: MOUSEMUX_REQUEST_IDS - Posted to MouseMux window {:?} for conn_id {} (rustdesk_hwnd={:?})",
             mousemux_hwnd,
             conn_id,
             rustdesk_hwnd
@@ -828,7 +828,7 @@ pub fn release_ids(conn_id: i32) -> bool {
     let mousemux_hwnd = match find_mousemux_window() {
         Some(hwnd) => hwnd,
         None => {
-            log::info!("MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - MouseMux window not found for conn_id {}", conn_id);
+            log::info!("MouseMux v2.2 protocol: MOUSEMUX_RELEASE_CONNECTION - MouseMux window not found for conn_id {}", conn_id);
             return false;
         }
     };
@@ -840,14 +840,14 @@ pub fn release_ids(conn_id: i32) -> bool {
     };
 
     if !has_ids {
-        log::warn!("MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - No IDs for conn_id {}", conn_id);
+        log::warn!("MouseMux v2.2 protocol: MOUSEMUX_RELEASE_CONNECTION - No IDs for conn_id {}", conn_id);
         return false;
     }
 
     // CRITICAL: Reset IDs to 100 BEFORE sending disconnect message
     // This prevents latent SendInput calls from using invalid IDs after disconnect
     log::info!(
-        "MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - Resetting IDs to 100 for conn_id {} before sending disconnect",
+        "MouseMux v2.2 protocol: MOUSEMUX_RELEASE_CONNECTION - Resetting IDs to 100 for conn_id {} before sending disconnect",
         conn_id
     );
 
@@ -863,19 +863,19 @@ pub fn release_ids(conn_id: i32) -> bool {
             mousemux_hwnd,
             MOUSEMUX_RELEASE_CONNECTION,
             conn_id as WPARAM,
-            0,  // lParam unused in V2.1
+            0,  // lParam unused in V2.2
         );
 
         if result == 0 {
             log::error!(
-                "MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - Failed to post for conn_id {}, error: {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_RELEASE_CONNECTION - Failed to post for conn_id {}, error: {}",
                 conn_id,
                 std::io::Error::last_os_error()
             );
             false
         } else {
             log::info!(
-                "MouseMux v2.1 protocol: MOUSEMUX_RELEASE_CONNECTION - Posted to MouseMux window {:?} for conn_id {}",
+                "MouseMux v2.2 protocol: MOUSEMUX_RELEASE_CONNECTION - Posted to MouseMux window {:?} for conn_id {}",
                 mousemux_hwnd,
                 conn_id
             );
@@ -887,7 +887,7 @@ pub fn release_ids(conn_id: i32) -> bool {
 /// Re-request IDs for all active connections
 /// Called when MouseMux restarts (RUSTDESK_SELF_START received)
 fn re_request_all_active_connections() {
-    log::info!("MouseMux v2.1 protocol: Re-requesting IDs for all active connections");
+    log::info!("MouseMux v2.2 protocol: Re-requesting IDs for all active connections");
     
     // Get list of connections that have peer_info
     let connections_to_reregister: Vec<(i32, String)> = {
@@ -899,19 +899,19 @@ fn re_request_all_active_connections() {
     };
     
     if connections_to_reregister.is_empty() {
-        log::info!("MouseMux v2.1 protocol: No active connections to re-register");
+        log::info!("MouseMux v2.2 protocol: No active connections to re-register");
         return;
     }
     
     log::info!(
-        "MouseMux v2.1 protocol: Re-registering {} active connection(s)",
+        "MouseMux v2.2 protocol: Re-registering {} active connection(s)",
         connections_to_reregister.len()
     );
     
     // Re-request IDs for each connection
     for (conn_id, peer_info) in connections_to_reregister {
         log::info!(
-            "MouseMux v2.1 protocol: Re-requesting IDs for conn_id {} (peer: {})",
+            "MouseMux v2.2 protocol: Re-requesting IDs for conn_id {} (peer: {})",
             conn_id,
             peer_info
         );

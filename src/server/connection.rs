@@ -130,7 +130,7 @@ enum MessageInput {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     Mouse((MouseEvent, i32)),
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    Key((KeyEvent, bool, i32)),  // Added i32 for conn_id (MouseMux V2.1)
+    Key((KeyEvent, bool, i32)),  // Added i32 for conn_id (MouseMux V2.2)
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     Pointer((PointerDeviceEvent, i32)),
     BlockOn,
@@ -1671,7 +1671,7 @@ impl Connection {
     fn on_remote_authorized(&self) {
         self.update_codec_on_login();
 
-        // Request MouseMux IDs for this connection (V2.1 - per-connection)
+        // Request MouseMux IDs for this connection (V2.2 - per-connection)
         #[cfg(windows)]
         {
             let conn_id = self.inner.id();
@@ -1829,7 +1829,7 @@ impl Connection {
     fn input_key(&self, msg: KeyEvent, press: bool) {
         // to-do: if is the legacy mode, and the key is function key "LockScreen".
         // Switch to the primary display.
-        let conn_id = self.inner.id();  // Get conn_id for MouseMux V2.1
+        let conn_id = self.inner.id();  // Get conn_id for MouseMux V2.2
         self.tx_input.send(MessageInput::Key((msg, press, conn_id))).ok();
     }
 
@@ -3793,7 +3793,7 @@ impl Connection {
         }
         self.closed = true;
 
-        // Release MouseMux IDs for this connection (V2.1 - per-connection)
+        // Release MouseMux IDs for this connection (V2.2 - per-connection)
         #[cfg(windows)]
         {
             if self.authorized {

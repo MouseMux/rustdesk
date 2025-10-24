@@ -497,7 +497,7 @@ pub mod server {
                                     }
                                     MouseMuxIds(conn_id, mouse_id, keyboard_id) => {
                                         log::info!(
-                                            "MouseMux v2.1 protocol: PORTABLE SERVICE received IPC message for conn_id {}: mouse={:?}, keyboard={:?}",
+                                            "MouseMux v2.2 protocol: PORTABLE SERVICE received IPC message for conn_id {}: mouse={:?}, keyboard={:?}",
                                             conn_id,
                                             mouse_id,
                                             keyboard_id
@@ -505,7 +505,7 @@ pub mod server {
                                         // Update the portable service's ENIGO instance
                                         crate::input_service::set_enigo_mousemux_ids(conn_id, mouse_id, keyboard_id);
                                         log::info!(
-                                            "MouseMux v2.1 protocol: PORTABLE SERVICE updated Enigo instance for conn_id {}",
+                                            "MouseMux v2.2 protocol: PORTABLE SERVICE updated Enigo instance for conn_id {}",
                                             conn_id
                                         );
                                     }
@@ -980,7 +980,7 @@ pub mod client {
     pub fn send_mousemux_ids(conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
         let running = RUNNING.lock().unwrap().clone();
         log::info!(
-            "MouseMux v2.1 protocol: MAIN PROCESS sending IDs to portable service: conn_id={}, mouse={:?}, keyboard={:?}, portable_service_running={}",
+            "MouseMux v2.2 protocol: MAIN PROCESS sending IDs to portable service: conn_id={}, mouse={:?}, keyboard={:?}, portable_service_running={}",
             conn_id,
             mouse_id,
             keyboard_id,
@@ -993,12 +993,12 @@ pub mod client {
             conn_id, mouse_id, keyboard_id,
         ))) {
             log::warn!(
-                "MouseMux v2.1 protocol: Failed to send IDs via IPC (portable service may not be running yet): {}",
+                "MouseMux v2.2 protocol: Failed to send IDs via IPC (portable service may not be running yet): {}",
                 e
             );
         } else {
             log::info!(
-                "MouseMux v2.1 protocol: IPC message sent successfully for conn_id {}",
+                "MouseMux v2.2 protocol: IPC message sent successfully for conn_id {}",
                 conn_id
             );
         }
