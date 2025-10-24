@@ -1,13 +1,27 @@
+<p align="center">
+  <img src="https://www.mousemux.com/images/logo.png" alt="MouseMux Logo" width="80%">
+</p>
+
 <h1 align="center">RustDesk MouseMux Edition</h1>
 
 <p align="center">
-  <img src="https://www.mousemux.com/images/logo.png" alt="MouseMux Logo" width="200"><br>
   <b>MouseMux + RustDesk = Multi-user remote desktop</b>
 </p>
 
 ## What is MouseMux?
 
 This is a **MouseMux-compliant fork** of RustDesk that enables **true multi-user remote desktop access**. MouseMux allows multiple users to connect to a single Windows desktop simultaneously, each with their own independent mouse cursor and input control.
+
+## Cross-Platform Client Support
+
+**No special software required on the client side.** Anyone with standard RustDesk, whether they're using Windows, macOS, Linux, iOS, or Android, can connect to your MouseMux-enabled Windows host and automatically receive their own independent cursor.
+
+- **Windows, macOS, Linux** - Full desktop client support
+- **iOS and Android** - Mobile device support
+- **Standard RustDesk clients** - No modifications, reinstallation, or special configuration needed
+- **Automatic cursor assignment** - Each client gets their own cursor the moment they connect
+
+This backward compatibility means you can set up a collaborative workspace without requiring everyone on your team to install special software. A developer on macOS, a designer on Windows, and a manager on Linux can all connect using their existing RustDesk installations.
 
 ## MouseMux Integration
 
