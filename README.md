@@ -1,8 +1,8 @@
-# RustDesk MouseMux Edition
+<h1 align="center">RustDesk MouseMux Edition</h1>
 
 <p align="center">
   <img src="https://www.mousemux.com/images/logo.png" alt="MouseMux Logo" width="200"><br>
-  <b>Multi-User Remote Desktop Solution</b>
+  <b>MouseMux + RustDesk = Multi-user remote desktop</b>
 </p>
 
 ## What is MouseMux?
@@ -14,7 +14,7 @@ This is a **MouseMux-compliant fork** of RustDesk that enables **true multi-user
 This RustDesk build integrates seamlessly with the **MouseMux V2.2 protocol**, providing:
 
 - **Per-Connection ID Management** - Each connected user gets a unique cursor ID, allowing simultaneous independent control
-- **Real-Time Synchronization** - Bidirectional communication with the MouseMux application via Windows messaging
+- **Real-Time Synchronization** - Bidirectional communication with the MouseMux application
 - **Connection Lifecycle Tracking** - Automatic ID assignment on connect and release on disconnect
 - **Multi-User Input Routing** - Modified input handling that routes mouse/keyboard events per connection ID
 - **User Count Display** - Real-time display of connected users in the Flutter UI
