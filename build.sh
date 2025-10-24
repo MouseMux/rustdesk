@@ -1,6 +1,6 @@
 #!/bin/bash
 # MouseMux RustDesk Flutter - Build Script
-# This builds the latest RustDesk with MouseMux V2.1 protocol support
+# This builds the latest RustDesk with MouseMux V2.2 protocol support
 
 set -e  # Exit on any error
 
@@ -91,7 +91,7 @@ echo "========================================"
 echo ""
 echo "Built at: $(date)"
 echo ""
-echo "This build includes MouseMux V2.1 protocol support."
+echo "This build includes MouseMux V2.2 protocol support."
 echo "Multiple users can now connect simultaneously with"
 echo "independent mouse cursors using the MouseMux application."
 echo ""

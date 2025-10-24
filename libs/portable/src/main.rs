@@ -146,7 +146,7 @@ fn main() {
         }
         i += 1;
     }
-    // MouseMux V2.1: Never trigger install mode - user will handle installation
+    // MouseMux V2.2: Never trigger install mode - user will handle installation
     // Installation is managed externally by MouseMux launcher
     let quick_support = args.is_empty() && arg_exe.to_lowercase().ends_with("qs.exe");
 

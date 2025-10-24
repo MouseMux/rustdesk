@@ -8,7 +8,7 @@ This directory (`O:\rustdesk-development\rustdesk-current`) is the **ongoing mai
 
 **Key Goals:**
 1. Stay current with upstream RustDesk development
-2. Maintain MouseMux V2.1 protocol compatibility
+2. Maintain MouseMux V2.2 protocol compatibility
 3. Provide users with the latest RustDesk features + MouseMux support
 4. Test compatibility before public releases
 
@@ -101,7 +101,7 @@ git push origin mousemux-flutter-minimal
 ## Files Modified for MouseMux
 
 ### Core Protocol Files
-- `src/platform/windows_mousemux.rs` - **MouseMux V2.1 protocol implementation**
+- `src/platform/windows_mousemux.rs` - **MouseMux V2.2 protocol implementation**
   - Per-connection ID management
   - Windows message-based IPC with MouseMux app
   - Connection lifecycle tracking
@@ -244,7 +244,7 @@ git log mousemux-flutter-current --oneline -10 -- [conflicted_file]
 
 ### Base Version
 - **RustDesk Base Commit:** `db4296533` (October 2025, nightly branch)
-- **MouseMux Protocol:** V2.1
+- **MouseMux Protocol:** V2.2
 
 ### Current Version
 - **RustDesk Master:** `c90d72d72` (as of October 19, 2025)

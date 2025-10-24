@@ -344,13 +344,13 @@ impl Enigo {
     fn get_mouse_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((mouse_id, _)) = self.mousemux_ids.get(&conn_id) {
-                log::trace!("MouseMux v2.1 protocol: get_mouse_extra_info() - Using ID 0x{:X} for conn_id {}", *mouse_id, conn_id);
+                log::trace!("MouseMux v2.2 protocol: get_mouse_extra_info() - Using ID 0x{:X} for conn_id {}", *mouse_id, conn_id);
                 return *mouse_id;
             } else {
-                log::trace!("MouseMux v2.1 protocol: get_mouse_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
+                log::trace!("MouseMux v2.2 protocol: get_mouse_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
             }
         } else {
-            log::trace!("MouseMux v2.1 protocol: get_mouse_extra_info() - No current_conn_id set, using default 100");
+            log::trace!("MouseMux v2.2 protocol: get_mouse_extra_info() - No current_conn_id set, using default 100");
         }
         ENIGO_INPUT_EXTRA_VALUE
     }
@@ -359,18 +359,18 @@ impl Enigo {
     fn get_keyboard_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((_, keyboard_id)) = self.mousemux_ids.get(&conn_id) {
-                log::trace!("MouseMux v2.1 protocol: get_keyboard_extra_info() - Using ID 0x{:X} for conn_id {}", *keyboard_id, conn_id);
+                log::trace!("MouseMux v2.2 protocol: get_keyboard_extra_info() - Using ID 0x{:X} for conn_id {}", *keyboard_id, conn_id);
                 return *keyboard_id;
             } else {
-                log::trace!("MouseMux v2.1 protocol: get_keyboard_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
+                log::trace!("MouseMux v2.2 protocol: get_keyboard_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
             }
         } else {
-            log::trace!("MouseMux v2.1 protocol: get_keyboard_extra_info() - No current_conn_id set, using default 100");
+            log::trace!("MouseMux v2.2 protocol: get_keyboard_extra_info() - No current_conn_id set, using default 100");
         }
         ENIGO_INPUT_EXTRA_VALUE
     }
 
-    /// Set MouseMux IDs from V2.1 protocol
+    /// Set MouseMux IDs from V2.2 protocol
     /// Called by input_service when IDs are received from MouseMux
     /// conn_id: The connection ID for this client
     /// mouse_id: Assigned mouse ID for this connection (or None)
@@ -378,18 +378,18 @@ impl Enigo {
     pub fn set_mousemux_ids(&mut self, conn_id: i32, mouse_id: Option<u32>, keyboard_id: Option<u32>) {
         if let (Some(m_id), Some(k_id)) = (mouse_id, keyboard_id) {
             self.mousemux_ids.insert(conn_id, (m_id as ULONG_PTR, k_id as ULONG_PTR));
-            log::info!("MouseMux v2.1 protocol: Enigo::set_mousemux_ids() - IDs set for conn_id {}: Mouse=0x{:X} ({}), Keyboard=0x{:X} ({})",
+            log::info!("MouseMux v2.2 protocol: Enigo::set_mousemux_ids() - IDs set for conn_id {}: Mouse=0x{:X} ({}), Keyboard=0x{:X} ({})",
                 conn_id, m_id, m_id, k_id, k_id);
-            log::info!("MouseMux v2.1 protocol: Enigo HashMap now contains {} entries", self.mousemux_ids.len());
+            log::info!("MouseMux v2.2 protocol: Enigo HashMap now contains {} entries", self.mousemux_ids.len());
         } else {
             // Remove IDs if either is None
             let had_entry = self.mousemux_ids.remove(&conn_id).is_some();
             if had_entry {
-                log::info!("MouseMux v2.1 protocol: Enigo::set_mousemux_ids() - IDs cleared for conn_id {} (reset to 100)", conn_id);
+                log::info!("MouseMux v2.2 protocol: Enigo::set_mousemux_ids() - IDs cleared for conn_id {} (reset to 100)", conn_id);
             } else {
-                log::info!("MouseMux v2.1 protocol: Enigo::set_mousemux_ids() - No IDs to clear for conn_id {} (already None)", conn_id);
+                log::info!("MouseMux v2.2 protocol: Enigo::set_mousemux_ids() - No IDs to clear for conn_id {} (already None)", conn_id);
             }
-            log::info!("MouseMux v2.1 protocol: Enigo HashMap now contains {} entries", self.mousemux_ids.len());
+            log::info!("MouseMux v2.2 protocol: Enigo HashMap now contains {} entries", self.mousemux_ids.len());
         }
     }
 
@@ -397,7 +397,7 @@ impl Enigo {
     /// Must be called before injecting input for a specific connection
     pub fn set_current_conn_id(&mut self, conn_id: Option<i32>) {
         self.current_conn_id = conn_id;
-        log::trace!("MouseMux v2.1 protocol: Current conn_id set to {:?}", conn_id);
+        log::trace!("MouseMux v2.2 protocol: Current conn_id set to {:?}", conn_id);
     }
 
     /// Gets the (width, height) of the main display in screen coordinates
