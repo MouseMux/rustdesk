@@ -2,7 +2,7 @@
 
 **Date:** October 24, 2025
 **RustDesk Version:** 1.4.3
-**MouseMux Version:** V2.1
+**MouseMux Version:** V2.2
 **Build Type:** Flutter Windows Release
 
 ---
@@ -20,7 +20,7 @@
 
 **Contents:**
 - `rustdesk.exe` (263 KB) - Main Flutter application
-- `librustdesk.dll` (28 MB) - Rust library with MouseMux V2.1 integration
+- `librustdesk.dll` (28 MB) - Rust library with MouseMux V2.2 integration
 - `flutter_windows.dll` (18 MB) - Flutter runtime
 - 14 Flutter plugin DLLs for desktop features
 - `data/` directory with assets and resources
@@ -28,7 +28,7 @@
 **Total:** 88 files packaged
 
 ### 2. Portable Installer (Recommended for Distribution)
-**Location:** `rustdesk-1.4.3-mousemux-v2.1-install.exe`
+**Location:** `rustdesk-1.4.3-mousemux-v2.2-install.exe`
 
 **Details:**
 - **Size:** 21 MB
@@ -71,7 +71,7 @@ cargo build --features flutter --lib --release
 **Results:**
 - Build time: 8 minutes 19 seconds
 - Output: `librustdesk.dll` (28 MB)
-- MouseMux V2.1 code: Zero errors
+- MouseMux V2.2 code: Zero errors
 - Dependencies resolved: All whiteboard features included
 
 ### Phase 3: Flutter Windows Build ✅
@@ -99,11 +99,11 @@ flutter build windows --release
 2. Compressed all application files with Brotli
 3. Created self-extracting installer
 
-**Result:** `rustdesk-1.4.3-mousemux-v2.1-install.exe` (21 MB)
+**Result:** `rustdesk-1.4.3-mousemux-v2.2-install.exe` (21 MB)
 
 ---
 
-## MouseMux V2.1 Integration
+## MouseMux V2.2 Integration
 
 ### Core Features Included
 
@@ -196,13 +196,13 @@ flutter build windows --release
 
 ### Option 1: Portable Installer (Recommended)
 
-**File:** `rustdesk-1.4.3-mousemux-v2.1-install.exe`
+**File:** `rustdesk-1.4.3-mousemux-v2.2-install.exe`
 
 **To Run:**
 1. Double-click the installer
 2. Application extracts and launches automatically
 3. No installation or admin rights required
-4. All MouseMux V2.1 features enabled
+4. All MouseMux V2.2 features enabled
 
 **To Distribute:**
 - Single file distribution (21 MB)
@@ -243,11 +243,11 @@ Before deployment, verify:
 
 ## Version Information
 
-**Full Version String:** `1.4.3-mousemux-v2.1`
+**Full Version String:** `1.4.3-mousemux-v2.2`
 
 **Component Versions:**
 - RustDesk Core: 1.4.3 (commit c9940957f)
-- MouseMux Protocol: V2.1
+- MouseMux Protocol: V2.2
 - Flutter: 3.24.5
 - Rust: 1.75+
 
@@ -331,7 +331,7 @@ Before deployment, verify:
 
 ## Conclusion
 
-**MouseMux V2.1 integration with RustDesk 1.4.3 is COMPLETE and SUCCESSFUL.**
+**MouseMux V2.2 integration with RustDesk 1.4.3 is COMPLETE and SUCCESSFUL.**
 
 All build artifacts have been created and are ready for testing and deployment. The portable installer provides a single-file distribution method that includes all MouseMux multi-user remote desktop features.
 

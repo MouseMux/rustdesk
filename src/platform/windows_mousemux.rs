@@ -1,4 +1,4 @@
-// MouseMux Protocol V2.1 - Windows Message Window Implementation
+// MouseMux Protocol V2.2 - Windows Message Window Implementation
 // Per-connection ID assignment for multi-user collaboration
 
 use hbb_common::log;
@@ -39,8 +39,8 @@ const MOUSEMUX_REQUEST_EXIT: u32 = WM_APP + 200;         // MouseMux requests Ru
 const MOUSEMUX_EXITING: u32 = WM_APP + 210;              // MouseMux is exiting (reset user count)
 
 // Protocol version and RustDesk version
-const PROTOCOL_VERSION: u32 = 121;  // V2.1 = 121
-const RUSTDESK_VERSION: u32 = 142;  // 1.4.2 = 142
+const PROTOCOL_VERSION: u32 = 122;  // V2.2 = 122
+const RUSTDESK_VERSION: u32 = 143;  // 1.4.3 = 143
 
 // MouseMux window to find
 const MOUSEMUX_WINDOW_CLASS: &str = "mousemux.main.window.query\0";

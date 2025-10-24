@@ -7,7 +7,7 @@
 
 ## Build Complete ✅
 
-**MouseMux V2.1 integration with RustDesk 1.4.3 compiles successfully!**
+**MouseMux V2.2 integration with RustDesk 1.4.3 compiles successfully!**
 
 ---
 
@@ -46,7 +46,7 @@
 ### Build Results
 
 ✅ **Rust library compiles successfully**
-- All MouseMux V2.1 code integrates perfectly with RustDesk 1.4.3
+- All MouseMux V2.2 code integrates perfectly with RustDesk 1.4.3
 - Zero compilation errors
 - Only 23 cosmetic warnings (unused functions, mostly in whiteboard code)
 
@@ -114,7 +114,7 @@ python build.py --flutter
 ```
 
 ### Option 2: Build Rust Library Only (Current Status)
-The Rust library with MouseMux V2.1 integration is complete and ready:
+The Rust library with MouseMux V2.2 integration is complete and ready:
 ```bash
 export VCPKG_ROOT=/o/rustdesk-build/vcpkg
 cd /o/rustdesk-development/rustdesk-current
@@ -133,7 +133,7 @@ cargo build --features flutter --lib --release
 
 ### Build Compatibility: ✅ SUCCESS
 - Rust library compiles successfully
-- MouseMux V2.1 protocol fully integrated
+- MouseMux V2.2 protocol fully integrated
 - All dependencies resolved
 - Ready for testing with MouseMux application
 
@@ -170,7 +170,7 @@ cargo build --features flutter --lib --release
 
 **MouseMux Integration:** ✅ **COMPLETE SUCCESS**
 
-All MouseMux V2.1 code successfully integrates with RustDesk 1.4.3:
+All MouseMux V2.2 code successfully integrates with RustDesk 1.4.3:
 - Zero compilation errors
 - Zero merge conflicts
 - All dependencies resolved
@@ -179,7 +179,7 @@ All MouseMux V2.1 code successfully integrates with RustDesk 1.4.3:
 
 **Build Status:** ✅ **RUST BUILD SUCCESSFUL**
 
-The Rust library with MouseMux V2.1 protocol support compiles successfully. Complete Flutter UI build requires Flutter SDK to be installed and added to PATH.
+The Rust library with MouseMux V2.2 protocol support compiles successfully. Complete Flutter UI build requires Flutter SDK to be installed and added to PATH.
 
 **Next Action:** Test with MouseMux application to verify protocol compatibility, or complete Flutter UI build after installing Flutter SDK.
 
