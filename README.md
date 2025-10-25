@@ -53,6 +53,19 @@ Visit [www.mousemux.com](https://www.mousemux.com) for more information about Mo
 
 To use this MouseMux-enabled RustDesk client, download the **MouseMux 2.2.x beta** from [www.mousemux.com](https://www.mousemux.com). The MouseMux application includes this RustDesk client and handles all configuration automatically.
 
+## Repository Branches
+
+This repository maintains two primary branches:
+
+- **[master](https://github.com/MouseMux/rustdesk/tree/master)** - Documentation and README showcasing MouseMux integration
+- **[mousemux-v2.2-flutter-complete](https://github.com/MouseMux/rustdesk/tree/mousemux-v2.2-flutter-complete)** - Complete source code with MouseMux V2.2 protocol implementation, including:
+  - Modified input handling for per-connection ID routing
+  - Flutter UI with connected user count display
+  - Integration with MouseMux Windows application
+  - Full build and compilation support
+
+For developers interested in building from source or contributing, see the `mousemux-v2.2-flutter-complete` branch.
+
 ---
 
 **Note:** This fork is specifically designed to work with MouseMux. For standard RustDesk functionality without multi-user support, please use the [official RustDesk repository](https://github.com/rustdesk/rustdesk).
