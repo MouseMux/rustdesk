@@ -1,4 +1,67 @@
 <p align="center">
+  <img src="https://www.mousemux.com/images/logo.png" alt="MouseMux Logo" width="80%">
+</p>
+
+<h1 align="center">RustDesk MouseMux Edition</h1>
+
+<p align="center">
+  <b>MouseMux + RustDesk = Multi-user remote desktop</b>
+</p>
+
+## What is MouseMux?
+
+This is a **MouseMux-compliant fork** of RustDesk that enables **true multi-user remote desktop access**. MouseMux allows multiple users to connect to a single Windows desktop simultaneously, each with their own independent mouse cursor and input control.
+
+## Cross-Platform Client Support
+
+**No special software required on the client side.** Anyone with standard RustDesk, whether they're using Windows, macOS, Linux, iOS, or Android, can connect to your MouseMux-enabled Windows host and automatically receive their own independent cursor.
+
+- **Windows, macOS, Linux** - Full desktop client support
+- **iOS and Android** - Mobile device support
+- **Standard RustDesk clients** - No modifications, reinstallation, or special configuration needed
+- **Automatic cursor assignment** - Each client gets their own cursor the moment they connect
+
+This backward compatibility means you can set up a collaborative workspace without requiring everyone on your team to install special software. A developer on macOS, a designer on Windows, and a manager on Linux can all connect using their existing RustDesk installations.
+
+## MouseMux Integration
+
+This RustDesk build integrates seamlessly with the **MouseMux V2.2 protocol**, providing:
+
+- **Per-Connection ID Management** - Each connected user gets a unique cursor ID, allowing simultaneous independent control
+- **Real-Time Synchronization** - Bidirectional communication with the MouseMux application
+- **Connection Lifecycle Tracking** - Automatic ID assignment on connect and release on disconnect
+- **Multi-User Input Routing** - Modified input handling that routes mouse/keyboard events per connection ID
+- **User Count Display** - Real-time display of connected users in the Flutter UI
+- **Zero Configuration** - Works out-of-the-box when MouseMux is running on the host machine
+
+## Use Cases
+
+- **Collaborative Support** - Multiple technicians helping a user simultaneously
+- **Training Sessions** - Instructor and students working together on one machine
+- **Pair Programming** - Developers collaborating on the same codebase in real-time
+- **Multi-User Demonstrations** - Presenters showing different aspects of software simultaneously
+
+## Learn More
+
+Visit [www.mousemux.com](https://www.mousemux.com) for more information about MouseMux.
+
+- **Protocol Version**: V2.2 (122)
+- **RustDesk Base Version**: 1.4.3
+- **Build Version**: 1.4.3-mousemux-v2.2
+
+## Getting Started
+
+To use this MouseMux-enabled RustDesk client, download the **MouseMux 2.2.x beta** from [www.mousemux.com](https://www.mousemux.com). The MouseMux application includes this RustDesk client and handles all configuration automatically.
+
+---
+
+**Note:** This fork is specifically designed to work with MouseMux. For standard RustDesk functionality without multi-user support, please use the [official RustDesk repository](https://github.com/rustdesk/rustdesk).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Original RustDesk README
+
+<p align="center">
   <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
   <a href="#raw-steps-to-build">Build</a> •
   <a href="#how-to-build-with-docker">Docker</a> •
@@ -179,4 +242,3 @@ Please ensure that you run these commands from the root of the RustDesk reposito
 ![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
-
