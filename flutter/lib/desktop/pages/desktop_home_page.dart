@@ -457,7 +457,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           SizedBox(height: 10.0),
           InkWell(
             onTap: () async {
-              final url = Uri.parse('https://www.mousemux.com');
+              final url = Uri.parse('https://www.mousemux.com/pages/apps/rustdesk');
               await launchUrl(url);
             },
             child: Text(
