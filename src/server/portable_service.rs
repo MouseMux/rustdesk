@@ -490,9 +490,9 @@ pub mod server {
                                             crate::input_service::handle_pointer_(&evt, conn);
                                         }
                                     }
-                                    Key(v) => {
+                                    Key((v, conn)) => {
                                         if let Ok(evt) = KeyEvent::parse_from_bytes(&v) {
-                                            crate::input_service::handle_key_(&evt);
+                                            crate::input_service::handle_key_with_conn(&evt, conn);
                                         }
                                     }
                                     MouseMuxIds(conn_id, mouse_id, keyboard_id) => {
@@ -910,10 +910,12 @@ pub mod client {
         ))))
     }
 
-    fn handle_key_(evt: &KeyEvent) -> ResultType<()> {
+    fn handle_key_(evt: &KeyEvent, conn: i32) -> ResultType<()> {
         let mut v = vec![];
         evt.write_to_vec(&mut v)?;
-        ipc_send(Data::DataPortableService(DataPortableService::Key(v)))
+        ipc_send(Data::DataPortableService(DataPortableService::Key((
+            v, conn,
+        ))))
     }
 
     pub fn create_capturer(
@@ -964,11 +966,11 @@ pub mod client {
         }
     }
 
-    pub fn handle_key(evt: &KeyEvent, _conn: i32) {
+    pub fn handle_key(evt: &KeyEvent, conn: i32) {
         if RUNNING.lock().unwrap().clone() {
-            handle_key_(evt).ok();
+            handle_key_(evt, conn).ok();
         } else {
-            crate::input_service::handle_key_(evt);
+            crate::input_service::handle_key_with_conn(evt, conn);
         }
     }
 

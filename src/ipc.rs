@@ -179,7 +179,7 @@ pub enum DataPortableService {
     ConnCount(Option<usize>),
     Mouse((Vec<u8>, i32)),
     Pointer((Vec<u8>, i32)),
-    Key(Vec<u8>),
+    Key((Vec<u8>, i32)),  // MouseMux V2.2: Include conn_id for per-connection keyboard IDs
     RequestStart,
     WillClose,
     CmShowElevation(bool),

@@ -1734,6 +1734,23 @@ fn is_legacy_mode(evt: &KeyEvent) -> bool {
     evt.mode.enum_value_or(KeyboardMode::Legacy) == KeyboardMode::Legacy
 }
 
+// MouseMux V2.2: Handle keyboard events with connection ID
+pub fn handle_key_with_conn(evt: &KeyEvent, conn: i32) {
+    if EXITING.load(Ordering::SeqCst) {
+        return;
+    }
+
+    // Set current connection ID for MouseMux V2.2
+    #[cfg(windows)]
+    {
+        let mut en = ENIGO.lock().unwrap();
+        en.set_current_conn_id(Some(conn));
+        drop(en); // Release lock before processing key
+    }
+
+    handle_key_(evt);
+}
+
 pub fn handle_key_(evt: &KeyEvent) {
     if EXITING.load(Ordering::SeqCst) {
         return;
