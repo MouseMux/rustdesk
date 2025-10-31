@@ -344,13 +344,13 @@ impl Enigo {
     fn get_mouse_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((mouse_id, _)) = self.mousemux_ids.get(&conn_id) {
-                log::trace!("MouseMux v2.2 protocol: get_mouse_extra_info() - Using ID 0x{:X} for conn_id {}", *mouse_id, conn_id);
+                log::info!("MouseMux v2.2 protocol: get_mouse_extra_info() - Using Mouse ID 0x{:X} ({}) for conn_id {}", *mouse_id, *mouse_id, conn_id);
                 return *mouse_id;
             } else {
-                log::trace!("MouseMux v2.2 protocol: get_mouse_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
+                log::warn!("MouseMux v2.2 protocol: get_mouse_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
             }
         } else {
-            log::trace!("MouseMux v2.2 protocol: get_mouse_extra_info() - No current_conn_id set, using default 100");
+            log::warn!("MouseMux v2.2 protocol: get_mouse_extra_info() - No current_conn_id set, using default 100");
         }
         ENIGO_INPUT_EXTRA_VALUE
     }
@@ -359,13 +359,13 @@ impl Enigo {
     fn get_keyboard_extra_info(&self) -> ULONG_PTR {
         if let Some(conn_id) = self.current_conn_id {
             if let Some((_, keyboard_id)) = self.mousemux_ids.get(&conn_id) {
-                log::trace!("MouseMux v2.2 protocol: get_keyboard_extra_info() - Using ID 0x{:X} for conn_id {}", *keyboard_id, conn_id);
+                log::info!("MouseMux v2.2 protocol: get_keyboard_extra_info() - Using Keyboard ID 0x{:X} ({}) for conn_id {}", *keyboard_id, *keyboard_id, conn_id);
                 return *keyboard_id;
             } else {
-                log::trace!("MouseMux v2.2 protocol: get_keyboard_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
+                log::warn!("MouseMux v2.2 protocol: get_keyboard_extra_info() - No ID found for conn_id {}, using default 100", conn_id);
             }
         } else {
-            log::trace!("MouseMux v2.2 protocol: get_keyboard_extra_info() - No current_conn_id set, using default 100");
+            log::warn!("MouseMux v2.2 protocol: get_keyboard_extra_info() - No current_conn_id set, using default 100");
         }
         ENIGO_INPUT_EXTRA_VALUE
     }

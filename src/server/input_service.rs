@@ -1044,6 +1044,7 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     // Set current connection ID for MouseMux V2.2
     #[cfg(windows)]
     en.set_current_conn_id(Some(conn));
+        log::info!("MouseMux v2.2 protocol: handle_key_with_conn() - Set current_conn_id to {}", conn);
     #[cfg(target_os = "macos")]
     en.set_ignore_flags(enigo_ignore_flags());
     #[cfg(not(target_os = "macos"))]
@@ -1736,6 +1737,7 @@ fn is_legacy_mode(evt: &KeyEvent) -> bool {
 
 // MouseMux V2.2: Handle keyboard events with connection ID
 pub fn handle_key_with_conn(evt: &KeyEvent, conn: i32) {
+    log::info!("MouseMux v2.2 protocol: handle_key_with_conn() called for conn_id {}", conn);
     if EXITING.load(Ordering::SeqCst) {
         return;
     }
@@ -1745,6 +1747,7 @@ pub fn handle_key_with_conn(evt: &KeyEvent, conn: i32) {
     {
         let mut en = ENIGO.lock().unwrap();
         en.set_current_conn_id(Some(conn));
+        log::info!("MouseMux v2.2 protocol: handle_key_with_conn() - Set current_conn_id to {}", conn);
         drop(en); // Release lock before processing key
     }
 
