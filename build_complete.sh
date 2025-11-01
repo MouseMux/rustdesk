@@ -28,7 +28,7 @@ export PATH="${FLUTTER_BIN}:${PATH}"
 
 # Parse command line arguments
 START_STEP=1
-END_STEP=7
+END_STEP=8
 ONLY_STEP=""
 
 while [[ $# -gt 0 ]]; do
@@ -48,10 +48,11 @@ while [[ $# -gt 0 ]]; do
             echo "  1. Install Hardware Codec Dependencies (vcpkg)"
             echo "  2. Fix hwcodec build.rs Linkage"
             echo "  3. Clean hwcodec Build Cache"
-            echo "  4. Build Rust Library (hwcodec enabled)"
-            echo "  5. Build Flutter App"
-            echo "  6. Create Portable Installer"
-            echo "  7. Create ZIP and Organize Final Builds"
+            echo "  4. Generate Flutter-Rust Bridge"
+            echo "  5. Build Rust Library (hwcodec enabled)"
+            echo "  6. Build Flutter App"
+            echo "  7. Create Portable Installer"
+            echo "  8. Create ZIP and Organize Final Builds"
             echo ""
             echo "Usage examples:"
             echo "  ./build_complete.sh                    # Run all steps"
@@ -210,11 +211,53 @@ else
 fi
 
 # ============================================================================
-# Step 4: Build Rust Library with Hardware Codec
+# Step 4: Generate Flutter-Rust Bridge
 # ============================================================================
 
 if should_run_step 4; then
-    print_header "Step 4/7: Building Rust Library (hwcodec enabled)"
+    print_header "Step 4/8: Generating Flutter-Rust Bridge"
+
+    cd "$SCRIPT_DIR"
+
+    # Check if bridge file exists and is recent
+    if [ -f "flutter/lib/generated_bridge.dart" ]; then
+        echo "Bridge file exists, checking if regeneration is needed..."
+        # If src/flutter_ffi.rs is newer than generated_bridge.dart, regenerate
+        if [ "src/flutter_ffi.rs" -nt "flutter/lib/generated_bridge.dart" ]; then
+            echo "Source file is newer, regenerating bridge..."
+            NEED_REGEN=true
+        else
+            echo "Bridge file is up to date, skipping generation"
+            NEED_REGEN=false
+        fi
+    else
+        echo "Bridge file missing, generating..."
+        NEED_REGEN=true
+    fi
+
+    if [ "$NEED_REGEN" = true ]; then
+        flutter_rust_bridge_codegen \
+            --rust-input ./src/flutter_ffi.rs \
+            --dart-output ./flutter/lib/generated_bridge.dart
+
+        if [ $? -ne 0 ]; then
+            print_error "Bridge generation failed"
+            exit 1
+        fi
+        print_success "Flutter-Rust bridge generated"
+    else
+        print_success "Bridge file already up to date"
+    fi
+else
+    echo "Skipping Step 4: Generate Flutter-Rust Bridge"
+fi
+
+# ============================================================================
+# Step 5: Build Rust Library with Hardware Codec
+# ============================================================================
+
+if should_run_step 5; then
+    print_header "Step 5/8: Building Rust Library (hwcodec enabled)"
 
     cd "$SCRIPT_DIR"
 
@@ -239,15 +282,15 @@ if should_run_step 4; then
 
     print_success "Rust library built in ${RUST_BUILD_TIME}s"
 else
-    echo "Skipping Step 4: Build Rust Library"
+    echo "Skipping Step 5: Build Rust Library"
 fi
 
 # ============================================================================
-# Step 5: Build Flutter App
+# Step 6: Build Flutter App
 # ============================================================================
 
-if should_run_step 5; then
-    print_header "Step 5/7: Building Flutter App"
+if should_run_step 6; then
+    print_header "Step 6/8: Building Flutter App"
 
     cd "$SCRIPT_DIR/flutter"
 
@@ -273,17 +316,17 @@ if should_run_step 5; then
 
     print_success "Flutter app built in ${FLUTTER_BUILD_TIME}s"
 else
-    echo "Skipping Step 5: Build Flutter App"
+    echo "Skipping Step 6: Build Flutter App"
 fi
 
 TOTAL_BUILD_TIME=$((RUST_BUILD_TIME + FLUTTER_BUILD_TIME))
 
 # ============================================================================
-# Step 6: Create Portable Installer
+# Step 7: Create Portable Installer
 # ============================================================================
 
-if should_run_step 6; then
-    print_header "Step 6/7: Creating Portable Installer"
+if should_run_step 7; then
+    print_header "Step 7/8: Creating Portable Installer"
 
     cd "$SCRIPT_DIR"
 
@@ -332,8 +375,8 @@ if should_run_step 6; then
     INSTALLER_SIZE=$(ls -lh "$PORTABLE_INSTALLER" | awk '{print $5}')
     echo "  Size: $INSTALLER_SIZE"
 else
-    echo "Skipping Step 6: Create Portable Installer"
-    # Still need these variables for step 7
+    echo "Skipping Step 7: Create Portable Installer"
+    # Still need these variables for step 8
     PORTABLE_INSTALLER="rustdesk-${VERSION}-install.exe"
     if [ -f "$PORTABLE_INSTALLER" ]; then
         INSTALLER_SIZE=$(ls -lh "$PORTABLE_INSTALLER" | awk '{print $5}')
@@ -343,11 +386,11 @@ else
 fi
 
 # ============================================================================
-# Step 7: Create ZIP and Organize Final Builds
+# Step 8: Copy Release Folder and Organize Final Builds
 # ============================================================================
 
-if should_run_step 7; then
-    print_header "Step 7/7: Creating ZIP Package and Final Organization"
+if should_run_step 8; then
+    print_header "Step 8/8: Copying Release Folder and Final Organization"
 
     cd "$SCRIPT_DIR"
 
@@ -356,27 +399,18 @@ if should_run_step 7; then
 
     FLUTTER_BUILD_DIR="flutter/build/windows/x64/runner/Release"
 
-    echo "Creating ZIP archive..."
-    cd "${FLUTTER_BUILD_DIR}"
-
-    # Use native zip command (much faster than Python for many files)
-    ZIP_FILE="${BUILD_NAME}.zip"
-    zip -r "$ZIP_FILE" . > /dev/null 2>&1
+    echo "Copying Release folder..."
+    # Copy entire Release folder
+    cp -r "${FLUTTER_BUILD_DIR}" "${FINAL_BUILDS_DIR}/${BUILD_NAME}/Release"
 
     if [ $? -ne 0 ]; then
-        print_error "ZIP creation failed"
+        print_error "Release folder copy failed"
         exit 1
     fi
 
-    ZIP_SIZE_HUMAN=$(ls -lh "$ZIP_FILE" | awk '{print $5}')
-    echo "Created: $ZIP_FILE ($ZIP_SIZE_HUMAN)"
-
-    mv "$ZIP_FILE" "${FINAL_BUILDS_DIR}/${BUILD_NAME}/"
-
-    cd "$SCRIPT_DIR"
-
-    ZIP_SIZE=$(ls -lh "${FINAL_BUILDS_DIR}/${BUILD_NAME}/${ZIP_FILE}" | awk '{print $5}')
-    print_success "ZIP package created: ${ZIP_FILE} (${ZIP_SIZE})"
+    # Get size of Release folder
+    RELEASE_SIZE=$(du -sh "${FINAL_BUILDS_DIR}/${BUILD_NAME}/Release" | awk '{print $1}')
+    print_success "Copied Release folder (${RELEASE_SIZE})"
 
     # Copy portable installer
     if [ -f "$PORTABLE_INSTALLER" ]; then
@@ -393,18 +427,18 @@ if should_run_step 7; then
 
     # Create README
     cat > "${FINAL_BUILDS_DIR}/${BUILD_NAME}/README.txt" << EOF
-RustDesk MouseMux Edition - Hardware Codec Build
-================================================
+RustDesk MouseMux Edition - Keyboard ID Fix Build
+==================================================
 
 Version: ${VERSION}
 Build Date: ${TIMESTAMP}
 Build Time: ${TOTAL_BUILD_TIME}s (Rust: ${RUST_BUILD_TIME}s, Flutter: ${FLUTTER_BUILD_TIME}s)
 
-CRITICAL FIX:
-- APP_NAME changed from "RustDesk MouseMux Edition" to "rustdesk-mousemux-edition"
-- Removes spaces from Windows paths (C:\ProgramData\rustdesk-mousemux-edition\...)
-- Fixes named pipes (\\.\pipe\rustdesk-mousemux-edition\...)
-- This should resolve the "waiting for image" issue
+KEYBOARD ID FIX:
+- Fixed keyboard sending default ID 100 instead of per-connection ID (6002)
+- Both mouse (6001) and keyboard (6002) now send correct IDs
+- Added dynamic rdev keyboard extra info handling
+- Map keyboard mode now uses correct per-connection IDs
 
 Features:
 - Hardware Codec (hwcodec) enabled
@@ -413,13 +447,13 @@ Features:
 - FFmpeg with swresample
 
 Files in this package:
-1. ${PORTABLE_INSTALLER} (${INSTALLER_SIZE})
+1. Release/ (${RELEASE_SIZE})
+   - Complete release folder with all dependencies
+   - Run Release/rustdesk.exe directly
+
+2. ${PORTABLE_INSTALLER} (${INSTALLER_SIZE})
    - Portable installer with all dependencies packed
    - Run this to install RustDesk
-
-2. ${ZIP_FILE} (${ZIP_SIZE})
-   - Portable ZIP package
-   - Extract and run rustdesk.exe directly
 
 3. Build logs (rust + flutter)
 
@@ -428,9 +462,10 @@ Hardware Codec Libraries:
 - Intel MFX (libmfx dispatcher)
 - Windows Media Foundation (mfuuid, mfplat, strmiids)
 
-This build should resolve the "waiting for image" issue by:
-1. Using H265 hardware encoding instead of VP9 software encoding
-2. Fixing APP_NAME to remove spaces (Windows 11 path issue)
+This build fixes the keyboard ID issue by:
+1. Setting rdev keyboard extra info dynamically per connection
+2. Using enigo's mousemux_ids map to get the correct keyboard ID
+3. Ensuring both enigo and rdev paths use the correct IDs
 EOF
 
     print_success "Created: README.txt"
@@ -439,14 +474,14 @@ EOF
     echo "Final Builds Location:"
     echo "  ${FINAL_BUILDS_DIR}/${BUILD_NAME}/"
 else
-    echo "Skipping Step 7: Create ZIP and Organize Final Builds"
+    echo "Skipping Step 8: Copy Release and Organize Final Builds"
 fi
 
 # ============================================================================
 # Build Summary
 # ============================================================================
 
-if should_run_step 7; then
+if should_run_step 8; then
     print_header "Build Summary"
 
     echo "Build Configuration:"

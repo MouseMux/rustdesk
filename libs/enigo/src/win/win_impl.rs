@@ -267,12 +267,14 @@ impl KeyboardControllable for Enigo {
     fn key_click(&mut self, key: Key) {
         let vk = self.key_to_keycode(key);
         let extra_info = self.get_keyboard_extra_info();
+        log::info!("MouseMux v2.2 protocol: key_click() - vk={}, extra_info={} (0x{:X})", vk, extra_info, extra_info);
         keybd_event(0, vk, 0, extra_info);
         keybd_event(KEYEVENTF_KEYUP, vk, 0, extra_info);
     }
 
     fn key_down(&mut self, key: Key) -> crate::ResultType {
         let extra_info = self.get_keyboard_extra_info();
+        log::info!("MouseMux v2.2 protocol: key_down() called - key={:?}, extra_info={} (0x{:X})", key, extra_info, extra_info);
         match &key {
             Key::Layout(c) => {
                 // to-do: dup code
@@ -289,6 +291,7 @@ impl KeyboardControllable for Enigo {
                         }
                     }
 
+                    log::info!("MouseMux v2.2 protocol: key_down(Layout) - calling keybd_event with vk={}, extra_info={} (0x{:X})", vk, extra_info, extra_info);
                     let res = keybd_event(0, vk, 0, extra_info);
                     let err = if res == 0 { get_error() } else { "".to_owned() };
 
@@ -311,6 +314,7 @@ impl KeyboardControllable for Enigo {
                 if code == 0 || code == 65535 {
                     return Err("".into());
                 }
+                log::info!("MouseMux v2.2 protocol: key_down(default) - calling keybd_event with code={}, extra_info={} (0x{:X})", code, extra_info, extra_info);
                 let res = keybd_event(0, code, 0, extra_info);
                 if res == 0 {
                     let err = get_error();
@@ -325,7 +329,9 @@ impl KeyboardControllable for Enigo {
 
     fn key_up(&mut self, key: Key) {
         let extra_info = self.get_keyboard_extra_info();
-        keybd_event(KEYEVENTF_KEYUP, self.key_to_keycode(key), 0, extra_info);
+        let code = self.key_to_keycode(key);
+        log::info!("MouseMux v2.2 protocol: key_up() - key={:?}, code={}, extra_info={} (0x{:X})", key, code, extra_info, extra_info);
+        keybd_event(KEYEVENTF_KEYUP, code, 0, extra_info);
     }
 
     fn get_key_state(&mut self, key: Key) -> bool {
@@ -398,6 +404,11 @@ impl Enigo {
     pub fn set_current_conn_id(&mut self, conn_id: Option<i32>) {
         self.current_conn_id = conn_id;
         log::trace!("MouseMux v2.2 protocol: Current conn_id set to {:?}", conn_id);
+    }
+
+    /// Get the keyboard ID for a specific connection
+    pub fn get_keyboard_id(&self, conn_id: i32) -> Option<usize> {
+        self.mousemux_ids.get(&conn_id).map(|(_, keyboard_id)| *keyboard_id)
     }
 
     /// Gets the (width, height) of the main display in screen coordinates
