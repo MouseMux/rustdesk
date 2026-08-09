@@ -1684,19 +1684,13 @@ impl Connection {
                 format!("conn_{}", conn_id)
             };
 
-            // Truncate to 256 chars if needed
-            let peer_info = if peer_info.len() > 256 {
-                &peer_info[..256]
-            } else {
-                &peer_info
-            };
-
+            // Length is capped inside request_ids, by characters, per the protocol.
             log::info!(
                 "#{} Client authorized, requesting MouseMux IDs with peer_info: '{}'",
                 conn_id,
                 peer_info
             );
-            crate::platform::windows_mousemux::request_ids(conn_id, peer_info);
+            crate::platform::windows_mousemux::request_ids(conn_id, &peer_info);
         }
         #[cfg(any(target_os = "windows", target_os = "linux"))]
         if config::option2bool(

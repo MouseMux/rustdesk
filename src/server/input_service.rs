@@ -445,6 +445,24 @@ lazy_static::lazy_static! {
 }
 static EXITING: AtomicBool = AtomicBool::new(false);
 
+// MouseMux V2.2: serializes a whole input event across connections.
+//
+// Every connection gets its own input thread (see Connection::start in
+// connection.rs), and both the key and mouse paths publish per-connection state
+// into process-wide globals - ENIGO's `current_conn_id` and rdev's
+// `DW_KEYBOARD_EXTRA_INFO` - which are read further down the call chain, after the
+// ENIGO lock has already been released and re-taken. Without this guard a
+// concurrent event from another connection can repoint those globals mid-event, so
+// the input goes out stamped with the wrong MouseMux HWID. MouseMux routes purely
+// on that stamp (it creates one synthetic device pair per HWID), so a wrong stamp
+// means one user's keystroke is delivered as another user's.
+//
+// LOCK ORDER: always acquire this BEFORE ENIGO, never the other way round.
+#[cfg(windows)]
+lazy_static::lazy_static! {
+    static ref INPUT_SERIALIZE: Mutex<()> = Mutex::new(());
+}
+
 // MouseMux V2.2 integration helper functions
 #[cfg(windows)]
 pub fn sync_mousemux_ids(conn_id: i32) {
@@ -1039,6 +1057,13 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     crate::platform::windows::try_change_desktop();
     let buttons = evt.mask >> 3;
     let evt_type = evt.mask & 0x7;
+
+    // Held for the whole event - see INPUT_SERIALIZE. A mouse event must not be able
+    // to repoint ENIGO's current_conn_id while another connection's key event is
+    // mid-flight. Taken before ENIGO, matching handle_key_with_conn's lock order.
+    #[cfg(windows)]
+    let _input_guard = INPUT_SERIALIZE.lock().unwrap();
+
     let mut en = ENIGO.lock().unwrap();
 
     // Set current connection ID for MouseMux V2.2
@@ -1747,6 +1772,11 @@ pub fn handle_key_with_conn(evt: &KeyEvent, conn: i32) {
         log::warn!("MouseMux v2.2 protocol: handle_key_with_conn() - EXITING, skipping key event");
         return;
     }
+
+    // Held for the whole event, including handle_key_() below - see INPUT_SERIALIZE.
+    // Must be taken before ENIGO to keep the lock order consistent with handle_mouse_.
+    #[cfg(windows)]
+    let _input_guard = INPUT_SERIALIZE.lock().unwrap();
 
     // Set current connection ID for MouseMux V2.2
     #[cfg(windows)]

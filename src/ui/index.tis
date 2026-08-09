@@ -629,7 +629,7 @@ class InstallMe: Reactor.Component {
     }
 
     event click $(#support-info) {
-        handler.open_url("https://www.mousemux.com/pages/rustdesk");
+        handler.open_url("https://www.mousemux.com");
     }
 }
 

@@ -12,9 +12,9 @@ use winapi::{
         windef::HWND,
     },
     um::winuser::{
-        CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, FindWindowA,
+        CreateWindowExA, DefWindowProcA, DispatchMessageA, FindWindowA,
         GetMessageA, PostMessageA, PostQuitMessage, RegisterClassExA, SetWindowTextA, TranslateMessage,
-        HWND_MESSAGE, MSG, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, CS_HREDRAW, CS_VREDRAW,
+        MSG, WNDCLASSEXA, CS_HREDRAW, CS_VREDRAW, WM_CLOSE, WM_DESTROY,
     },
 };
 
@@ -278,6 +278,15 @@ unsafe extern "system" fn window_proc(
             std::process::exit(0);
         }
 
+        WM_DESTROY => {
+            // Runs on the message-loop thread, which is the only thread allowed to
+            // end that loop. shutdown_mousemux_window() posts WM_CLOSE from another
+            // thread; DefWindowProcA turns that into DestroyWindow, landing here.
+            log::info!("MouseMux v2.2 protocol: WM_DESTROY - posting WM_QUIT to end message loop");
+            PostQuitMessage(0);
+            0
+        }
+
         _ => DefWindowProcA(hwnd, msg, wparam, lparam),
     }
 }
@@ -425,11 +434,13 @@ pub fn shutdown_mousemux_window() {
 
     if let Some(SendSyncHwnd(hwnd)) = hwnd {
         unsafe {
-            // Post WM_QUIT to message loop
-            PostQuitMessage(0);
-
-            // Destroy window
-            DestroyWindow(hwnd);
+            // Must be PostMessage, not PostQuitMessage/DestroyWindow: this runs on a
+            // different thread than the message loop. PostQuitMessage would queue
+            // WM_QUIT to *this* thread, and Windows refuses DestroyWindow on a window
+            // owned by another thread - so the loop would never exit and the join()
+            // below would block forever. WM_CLOSE routes through DefWindowProcA, which
+            // destroys the window and delivers WM_DESTROY on the loop thread.
+            PostMessageA(hwnd, WM_CLOSE, 0, 0);
         }
     }
 
@@ -677,12 +688,11 @@ pub fn notify_shutdown() -> bool {
 /// conn_id: RustDesk's internal connection ID
 /// peer_info: Peer identification string (format: "{name}@{id}")
 pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
-    // Truncate peer_info to max length
-    let peer_info = if peer_info.len() > MAX_PEER_INFO_LENGTH {
-        &peer_info[..MAX_PEER_INFO_LENGTH]
-    } else {
-        peer_info
-    };
+    // Truncate to MAX_PEER_INFO_LENGTH *characters*, not bytes.
+    // Byte-slicing a &str at a non-char-boundary panics, and peer names are
+    // attacker-supplied; the protocol also sends one message per character,
+    // so characters are the correct unit here.
+    let peer_info: String = peer_info.chars().take(MAX_PEER_INFO_LENGTH).collect();
 
     // CRITICAL: Store connection in HashMap FIRST, before checking if MouseMux is running
     // This ensures the connection is tracked even if MouseMux isn't running yet
@@ -740,18 +750,55 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
             PROTOCOL_VERSION
         );
 
-        // 2. Send MOUSEMUX_SET_CONNECTION_NAME (WM_APP+40): Peer info character-by-character
+        // 2. Send MOUSEMUX_SET_CONNECTION_NAME (WM_APP+40): peer info as UTF-32
+        //    little-endian, FOUR messages per character, low byte first.
+        //
+        //    MouseMux accumulates four messages into one code point
+        //    (rustdesk_handler.c: `utf32 |= (byte & 0xFF) << (bytes * 8)`), and
+        //    separately validates every value against 0..=127
+        //    (rustdesk_validation.c: NAME_CHAR_MAX). Those two rules only agree for
+        //    ASCII, so non-ASCII is replaced with '?' rather than being rejected by
+        //    the validator and dropped.
         for ch in peer_info.chars() {
+            let cp = if ch.is_ascii() { ch as u32 } else { b'?' as u32 };
+
+            for shift in 0..4 {
+                let byte = (cp >> (shift * 8)) & 0xFF;
+
+                let result = PostMessageA(
+                    mousemux_hwnd,
+                    MOUSEMUX_SET_CONNECTION_NAME,
+                    conn_id as WPARAM,
+                    byte as LPARAM,
+                );
+
+                if result == 0 {
+                    log::error!(
+                        "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post char byte {} for conn_id {}, error: {}",
+                        shift,
+                        conn_id,
+                        std::io::Error::last_os_error()
+                    );
+                    return false;
+                }
+            }
+        }
+
+        // 3. Send null terminator: four zero bytes, so MouseMux assembles UTF-32 0
+        //    and runs its end-of-name conversion. A single zero would only fill one
+        //    byte of the accumulator and would never terminate the name.
+        for shift in 0..4 {
             let result = PostMessageA(
                 mousemux_hwnd,
                 MOUSEMUX_SET_CONNECTION_NAME,
                 conn_id as WPARAM,
-                ch as u32 as LPARAM,
+                0,
             );
 
             if result == 0 {
                 log::error!(
-                    "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post char for conn_id {}, error: {}",
+                    "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post null byte {} for conn_id {}, error: {}",
+                    shift,
                     conn_id,
                     std::io::Error::last_os_error()
                 );
@@ -759,28 +806,11 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
             }
         }
 
-        // 3. Send null terminator
-        let result = PostMessageA(
-            mousemux_hwnd,
-            MOUSEMUX_SET_CONNECTION_NAME,
-            conn_id as WPARAM,
-            0,  // null terminator
-        );
-
-        if result == 0 {
-            log::error!(
-                "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Failed to post null for conn_id {}, error: {}",
-                conn_id,
-                std::io::Error::last_os_error()
-            );
-            return false;
-        }
-
         log::info!(
             "MouseMux v2.2 protocol: MOUSEMUX_SET_CONNECTION_NAME - Posted peer info '{}' for conn_id {} ({} chars + null)",
             peer_info,
             conn_id,
-            peer_info.len()
+            peer_info.chars().count()
         );
 
         // 4. Send MOUSEMUX_REQUEST_IDS (WM_APP+50): Trigger ID generation
@@ -825,14 +855,6 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
 ///
 /// conn_id: RustDesk's internal connection ID
 pub fn release_ids(conn_id: i32) -> bool {
-    let mousemux_hwnd = match find_mousemux_window() {
-        Some(hwnd) => hwnd,
-        None => {
-            log::info!("MouseMux v2.2 protocol: MOUSEMUX_RELEASE_CONNECTION - MouseMux window not found for conn_id {}", conn_id);
-            return false;
-        }
-    };
-
     // Check if we have IDs to release
     let has_ids = {
         let state = MOUSEMUX_STATE.lock().unwrap();
@@ -851,11 +873,26 @@ pub fn release_ids(conn_id: i32) -> bool {
         conn_id
     );
 
-    // Clear IDs from local state FIRST
+    // Clear IDs from local state FIRST. This must happen even when MouseMux is not
+    // running - otherwise the dead connection stays in the map forever, gets
+    // re-registered by re_request_all_active_connections() on the next MouseMux
+    // start, and keeps has_ids() reporting a stale connection to the UI.
     clear_ids_for_connection(conn_id);
 
     // Also remove from pending_peer_info
     MOUSEMUX_STATE.lock().unwrap().pending_peer_info.remove(&conn_id);
+
+    // Local state is now clean; notify MouseMux only if it is actually running.
+    let mousemux_hwnd = match find_mousemux_window() {
+        Some(hwnd) => hwnd,
+        None => {
+            log::info!(
+                "MouseMux v2.2 protocol: MOUSEMUX_RELEASE_CONNECTION - MouseMux window not found for conn_id {}, local state cleared",
+                conn_id
+            );
+            return false;
+        }
+    };
 
     // NOW send the disconnect message to MouseMux
     unsafe {
