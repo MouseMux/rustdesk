@@ -598,6 +598,74 @@ fixed anyway so the two do not drift again.
 
 ---
 
+## Upgrade plan — RustDesk 1.4.3 → 1.4.9
+
+**Researched 2026-08-09.** Upstream is at **1.4.9**; our base is **1.4.3**
+(`db4296533`, 2025-08-26). Six releases behind.
+
+### Facts gathered (via shallow fetch of tag 1.4.9)
+
+| | ours (1.4.3) | upstream 1.4.9 |
+|---|---|---|
+| `hbb_common` gitlink | `ee4f6db` (fork, base `5ed0afd`) | `7e1c392c` |
+| `hwcodec` rev (Cargo.lock) | `17c1dbb3` | `778df1f9` |
+| hwcodec pin style | git URL, no `rev` — resolved by Cargo.lock | same |
+
+### hwcodec: what the newer revision does and does not fix
+
+`778df1f9` **fixes** the `AVFrame::key_frame` removal with a proper guard
+(`#if FF_API_FRAME_KEY` → `frame_->flags & AV_FRAME_FLAG_KEY`).
+
+It **does not fix** the profile macros — `cpp/common/util.cpp:59,61` still use
+`FF_PROFILE_H264_HIGH` / `FF_PROFILE_HEVC_MAIN` unguarded, which FFmpeg 7.0
+removed in favour of `AV_PROFILE_*`.
+
+**Therefore upgrading alone does NOT restore hwcodec.** The real root cause is
+that this machine's classic-mode vcpkg has drifted to FFmpeg 8.0.1, while upstream
+builds against whatever `vcpkg.json`'s baseline (`120deac3…`) pins. The correct fix
+is to build the vcpkg dependencies from the project manifest rather than chasing
+hwcodec revisions.
+
+### MouseMux surface area to carry across
+
+Small and well-isolated. The bulk is a **new file** that cannot conflict:
+- `src/platform/windows_mousemux.rs` — 925 lines, new
+- `libs/enigo/src/win/win_impl.rs` — vendored fork: HWID map + `current_conn_id`
+- `libs/hbb_common` — 3 commits, 1 file (`src/config.rs`), needs rebasing onto
+  `7e1c392c`
+- ~12 small hook points: `connection.rs`, `input_service.rs`, `server.rs`,
+  `common.rs`, `ipc.rs`, `ui_interface.rs`, `flutter_ffi.rs`, `platform/mod.rs`,
+  `lib.rs`, `ui.rs`, `ui/index.tis`, `flutter/lib/.../desktop_home_page.dart`
+
+### Proposed sequence
+
+1. **Push the fork first** (Finding 1). Do not start an upgrade while the build is
+   reproducible on only one machine.
+2. **Close the remaining findings** (7, 8, 9, 11, 12, 13, 14, 15, 19) on the
+   current base. Cheaper than re-deriving them after a six-version merge.
+3. **Rebase the hbb_common fork** — 3 commits, 1 file — onto `7e1c392c`. This is
+   the rebase declined for the *restore*; for an *upgrade* it is unavoidable.
+4. **Merge upstream 1.4.9** into the MouseMux branch. Expect real conflicts only in
+   `input_service.rs` (where Finding 5's lock lives and upstream churns most) and
+   `connection.rs`.
+5. **Re-check `libs/enigo`** — upstream may have moved it independently of our fork.
+6. **Fix vcpkg properly**: build deps from the project manifest/baseline so FFmpeg
+   matches what hwcodec expects, then re-enable hwcodec via
+   `tools/setup-hwcodec.sh`.
+7. **Bump `RUSTDESK_VERSION`** in `windows_mousemux.rs` from 143 to 149. Cosmetic —
+   MouseMux validates a 100–999 range — but it is what MouseMux logs.
+8. Rebuild, verify branding + hwcodec strings in the DLL, archive as a new dated
+   build, retest with two simultaneous users.
+
+### Existing tooling for this
+
+`rustdesk-development/` already has infrastructure built for exactly this job:
+`patches/`, `patches-clean/`, `patches-minimal/`, `organize-patches.py`,
+`create-clean-patches.py`, `generate-minimal-patches.py`, and
+`MOUSEMUX_MAINTENANCE.md` describing the maintenance process.
+
+---
+
 ## Build log
 
 | Version | Date | Contains | Folder | Notes |
