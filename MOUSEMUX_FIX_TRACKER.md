@@ -101,6 +101,7 @@ Severity: **C**ritical / **M**oderate / **L**ow
 | 17 | L | Support URLs drifted between Sciter and Flutter UIs | FIXED — needs build |
 | 18 | C | Peer name encoding mismatch — RustDesk 1 msg/char vs MouseMux 4 msgs/char | FIXED — needs build |
 | 19 | L | Touch-scale path never sets `current_conn_id`, inherits a stale one | OPEN |
+| 20 | C | hwcodec build fix lives outside the repo, in the cargo cache | OPEN |
 
 ---
 
@@ -415,6 +416,73 @@ safe (no inversion is possible, since it never takes `INPUT_SERIALIZE` at all).
 Fix would be: take `INPUT_SERIALIZE`, then set `current_conn_id`, in
 `handle_pointer_` — mirroring `handle_mouse_`. Low priority: affects only
 touch/pinch input from mobile clients.
+
+---
+
+### Finding 20 — hwcodec build fix lives outside the repo (CRITICAL, reproducibility)
+
+**Status:** OPEN — patch re-applied by hand 2026-08-09, but not yet made reproducible.
+
+Same class of landmine as Finding 1: something the build genuinely requires, stored
+where git cannot see it.
+
+`hwcodec` is a **non-default** feature (`Cargo.toml`: `default = ["use_dasp"]`), and
+building with it fails to link unless two edits are made to the hwcodec crate's own
+`build.rs` — a file in the **cargo git checkout**:
+```
+C:\Users\dev\.cargo\git\checkouts\hwcodec-74796a7f8f16bbb9\17c1dbb\build.rs
+  line 157  static_libs: + "swresample"
+  line 177  dyn_libs:    + "mfuuid", "mfplat", "strmiids"
+```
+Documented in `BUGFIXES.md`, and a copy exists as
+`rustdesk-development/rustdesk-current/hwcodec_build_fix.patch` (note: that patch
+adds only mfuuid+mfplat; `BUGFIXES.md` adds strmiids too — the latter was used).
+
+Wiped by any cargo cache clear, and absent on every fresh machine. Neither the
+repo nor CI applies it.
+
+Also required, and equally undeclared for classic-mode vcpkg:
+`vcpkg install mfx-dispatch:x64-windows-static --classic`
+(`--classic` is needed because vcpkg otherwise finds a `vcpkg.json` and switches to
+manifest mode, which rejects named packages. `rustdesk/vcpkg.json` does declare
+`mfx-dispatch`, but manifest mode installs to a project-local `vcpkg_installed/`,
+not the global tree that `build.rs` reads via `VCPKG_ROOT`.)
+
+And per `BUGFIXES.md`, after patching the hwcodec cache **must** be purged or cargo
+silently relinks the unfixed `.rlib`:
+```
+rm -rf target/release/.fingerprint/hwcodec-* target/release/build/hwcodec-* \
+       target/release/deps/*hwcodec* target/release/*hwcodec*
+```
+
+**Consequence discovered 2026-08-09:** the first v2.3 build was made with
+`--features flutter` only, so it shipped with **no hardware codec at all** —
+verified by zero `avcodec`/`libmfx` references in the DLL. Every 2025-11-01 build
+had it. Would have been a silent encoding regression.
+
+**Partial fix applied 2026-08-09:** `tools/setup-hwcodec.sh` is now checked in. It
+installs the vcpkg package, applies the build.rs patch idempotently, and purges the
+fingerprints — so the requirement lives in the repo rather than in one machine's
+cargo cache.
+
+**BUT hwcodec still cannot be built here — a second, previously unknown blocker.**
+The linkage patch works (verified: `swresample`, `mfuuid`, `mfplat`, `strmiids` all
+appear in the emitted link directives). hwcodec 0.7.1 simply does not **compile**
+against modern FFmpeg. This machine's vcpkg has **FFmpeg 8.0.1** (libavutil 60.8),
+and hwcodec 0.7.1 was written for 6.x:
+```
+util.cpp(59,61)         error C2065: 'FF_PROFILE_H264_HIGH' / 'FF_PROFILE_HEVC_MAIN'
+                        undeclared            -> renamed to AV_PROFILE_* in FFmpeg 7.0
+ffmpeg_ram_decode(218)  error C2039: 'key_frame' is not a member of 'AVFrame'
+                        -> removed in FFmpeg 7.0, now AV_FRAME_FLAG_KEY in frame->flags
+```
+The 2025-11-01 builds were made against an older FFmpeg, on the VM.
+
+**Decision 2026-08-09:** ship v2.3 without hwcodec, clearly labelled, and fold
+hwcodec into the RustDesk 1.4.9 upgrade — a newer RustDesk should pin a newer
+hwcodec that supports current FFmpeg, solving both problems at once. Alternatives
+declined: downgrading the shared vcpkg FFmpeg to 6.x; patching hwcodec's C++ as a
+third out-of-repo patch.
 
 ---
 
