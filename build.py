@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-windows = platform.platform().startswith('Windows')
+windows = platform.platform().startswith('Windows') or 'MINGW' in platform.platform() or 'MSYS' in platform.platform()
 osx = platform.platform().startswith(
     'Darwin') or platform.platform().startswith("macOS")
 hbb_name = 'rustdesk' + ('.exe' if windows else '')

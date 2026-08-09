@@ -53,5 +53,10 @@ examples/**/target/
 # ===
 vcpkg_installed
 flutter/lib/generated_plugin_registrant.dart
+# flutter tool state
+flutter/.flutter
+flutter/.flutter_tool_state
+# local submodule safety copies (see MOUSEMUX_FIX_TRACKER.md)
+libs/hbb_common.upstream-backup/
 libsciter.dylib
 flutter/web/

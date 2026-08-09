@@ -6235,7 +6235,7 @@ dependencies = [
 
 [[package]]
 name = "rustdesk"
-version = "1.4.3-mousemux-v2.2"
+version = "1.4.3-mousemux-v2.3"
 dependencies = [
  "android-wakelock",
  "android_logger",
