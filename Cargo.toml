@@ -28,6 +28,10 @@ use_rubato = ["rubato"]
 use_dasp = ["dasp"]
 flutter = ["flutter_rust_bridge"]
 default = ["use_dasp"]
+# Per-event MouseMux tracing in the input hot path. Off by default - see the
+# mm_debug! macro in src/lib.rs. Combine with a release build when diagnosing
+# per-connection ID or handshake problems in the field.
+mousemux-debug = ["enigo/mousemux-debug"]
 hwcodec = ["scrap/hwcodec"]
 vram = ["scrap/vram"]
 mediacodec = ["scrap/mediacodec"]

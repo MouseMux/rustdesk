@@ -94,7 +94,7 @@ Severity: **C**ritical / **M**oderate / **L**ow
 | 10 | M | Version constant mismatch: code 143 vs protocol spec 142 | CLOSED — not a bug, see below |
 | 11 | M | Thread spam on every `MOUSEMUX_STARTUP_BROADCAST` | OPEN |
 | 12 | M | `RegisterClassExA` not idempotent — re-init fails | OPEN |
-| 13 | L | Per-keystroke `info!` logging in the input hot path | OPEN |
+| 13 | L | Per-keystroke `info!` logging in the input hot path | FIXED — needs build |
 | 14 | L | `pending_peer_info` duplicates `connections[].peer_info` | OPEN |
 | 15 | L | Unused `_hwnd` param / bound-but-unused `user_id` | OPEN |
 | 16 | L | Non-BMP chars sent as single `u32` may corrupt in a WCHAR buffer | SUPERSEDED by 18 |
@@ -325,12 +325,50 @@ equality. **Needs confirmation against the MouseMux side.**
 **Status:** OPEN — `windows_mousemux.rs:307` returns `Err` if the class already
 exists, so re-init after shutdown fails. Class is never unregistered.
 
-### Finding 13 — Per-keystroke logging in hot path (LOW)
+### Finding 13 — Per-event logging, now compile-time gated
 
-**Status:** OPEN — `input_service.rs:1744`, `:1760`, `:1769`, `:1771`, `:1775`,
-`:1379`, `:1543` all log at `info!` on every key event, plus a `debug!` for every
-`WM_APP` message. Added by commit `9bd35a65e` for debugging, never dialed back.
-Synchronous I/O on every keystroke.
+**Status:** FIXED 2026-08-09 — needs build to verify.
+**Decision:** cargo feature `mousemux-debug`, **not** `debug_assertions`.
+
+Originally: `input_service.rs` and enigo logged at `info!` on every key event —
+added by commit `9bd35a65e` for the October 2025 keyboard-ID investigation and
+never dialled back. Synchronous log I/O on every input event, in the same path
+Finding 5's serialization lock now runs through.
+
+Why a feature and not `debug_assertions`: the problems this tracing exists for
+(per-connection ID assignment, MouseMux handshake timing) only reproduce in
+**release** builds — the original investigation was done on release builds. A
+debug-only gate would remove the logging exactly when it is next needed.
+
+```
+normal release:        cargo build --features flutter --lib --release
+with MouseMux tracing: cargo build --features flutter,mousemux-debug --lib --release
+```
+
+Two macros, because two crates are involved:
+- `src/lib.rs` → `crate::mm_debug!` for the rustdesk crate
+- `libs/enigo/src/lib.rs` → `crate::mm_debug!` for enigo (needs doc comments —
+  enigo denies `missing_docs`)
+- `rustdesk`'s `mousemux-debug = ["enigo/mousemux-debug"]` propagates it, so one
+  flag drives both crates.
+
+With the feature off the macro expands to **nothing** — no runtime branch, no
+formatting cost. `log::debug!` would still cost a level check per call.
+
+**Gated (per-event, hot path):**
+
+| File | Sites |
+|------|-------|
+| `input_service.rs` | 8 — `handle_key_with_conn` ×4, `handle_key_`, `handle_mouse_`, `map_keyboard_mode`, `legacy_keyboard_mode` |
+| `enigo/win_impl.rs` | 6 — all arms of `get_mouse_extra_info` / `get_keyboard_extra_info` |
+
+The enigo sites were the worst: called on **every injected event, including every
+mouse move**, and the "no ID" arms were `warn!`, flooding the log whenever
+MouseMux simply was not running — a normal, supported state.
+
+**Deliberately NOT gated** — rare, and precisely what a field report needs:
+errors and warnings, ID assignment, connection register/release, protocol
+handshake, and the `EXITING` warning in `handle_key_with_conn`.
 
 ### Finding 14 — Redundant peer_info storage (LOW)
 

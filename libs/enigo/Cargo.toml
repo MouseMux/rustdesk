@@ -28,6 +28,11 @@ hbb_common = { path = "../hbb_common" }
 
 [features]
 with_serde = ["serde", "serde_derive"]
+# Per-event MouseMux tracing. OFF by default: get_mouse_extra_info() /
+# get_keyboard_extra_info() run on EVERY injected input event, including every
+# mouse move, so logging there is synchronous I/O at input frequency.
+# Enabled from the parent crate via rustdesk's own `mousemux-debug` feature.
+mousemux-debug = []
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "winbase"] }

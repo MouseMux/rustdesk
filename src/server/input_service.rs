@@ -1070,7 +1070,7 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     #[cfg(windows)]
     {
         en.set_current_conn_id(Some(conn));
-        log::info!("MouseMux v2.2 protocol: handle_mouse_() - Set current_conn_id to {}", conn);
+        crate::mm_debug!("MouseMux v2.2 protocol: handle_mouse_() - Set current_conn_id to {}", conn);
     }
     #[cfg(target_os = "macos")]
     en.set_ignore_flags(enigo_ignore_flags());
@@ -1401,7 +1401,7 @@ fn char_value_to_key(value: u32) -> Key {
 }
 
 fn map_keyboard_mode(evt: &KeyEvent) {
-    log::info!("MouseMux v2.2 protocol: map_keyboard_mode() called - chr={}, down={}", evt.chr(), evt.down);
+    crate::mm_debug!("MouseMux v2.2 protocol: map_keyboard_mode() called - chr={}, down={}", evt.chr(), evt.down);
     #[cfg(windows)]
     crate::platform::windows::try_change_desktop();
 
@@ -1565,7 +1565,7 @@ fn is_function_key(ck: &EnumOrUnknown<ControlKey>) -> bool {
 }
 
 fn legacy_keyboard_mode(evt: &KeyEvent) {
-    log::info!("MouseMux v2.2 protocol: legacy_keyboard_mode() called - union={:?}, down={}", evt.union, evt.down);
+    crate::mm_debug!("MouseMux v2.2 protocol: legacy_keyboard_mode() called - union={:?}, down={}", evt.union, evt.down);
     #[cfg(windows)]
     crate::platform::windows::try_change_desktop();
     let mut to_release: Vec<Key> = Vec::new();
@@ -1766,7 +1766,7 @@ fn is_legacy_mode(evt: &KeyEvent) -> bool {
 
 // MouseMux V2.2: Handle keyboard events with connection ID
 pub fn handle_key_with_conn(evt: &KeyEvent, conn: i32) {
-    log::info!("MouseMux v2.2 protocol: handle_key_with_conn() called for conn_id {}, down={}, mode={:?}, union={:?}",
+    crate::mm_debug!("MouseMux v2.2 protocol: handle_key_with_conn() called for conn_id {}, down={}, mode={:?}, union={:?}",
         conn, evt.down, evt.mode, evt.union);
     if EXITING.load(Ordering::SeqCst) {
         log::warn!("MouseMux v2.2 protocol: handle_key_with_conn() - EXITING, skipping key event");
@@ -1787,7 +1787,7 @@ pub fn handle_key_with_conn(evt: &KeyEvent, conn: i32) {
         // Get the keyboard ID for this connection and set it for rdev
         // rdev is used by map_keyboard_mode() which bypasses enigo
         let keyboard_id = en.get_keyboard_id(conn).unwrap_or(enigo::ENIGO_INPUT_EXTRA_VALUE);
-        log::info!("MouseMux v2.2 protocol: handle_key_with_conn() - Set current_conn_id to {} and rdev keyboard_id to {} (0x{:X})",
+        crate::mm_debug!("MouseMux v2.2 protocol: handle_key_with_conn() - Set current_conn_id to {} and rdev keyboard_id to {} (0x{:X})",
             conn, keyboard_id, keyboard_id);
 
         drop(en); // Release lock before processing key
@@ -1796,13 +1796,13 @@ pub fn handle_key_with_conn(evt: &KeyEvent, conn: i32) {
         rdev::set_keyboard_extra_info(keyboard_id);
     }
 
-    log::info!("MouseMux v2.2 protocol: handle_key_with_conn() - About to call handle_key_() for conn {}", conn);
+    crate::mm_debug!("MouseMux v2.2 protocol: handle_key_with_conn() - About to call handle_key_() for conn {}", conn);
     handle_key_(evt);
-    log::info!("MouseMux v2.2 protocol: handle_key_with_conn() - Returned from handle_key_() for conn {}", conn);
+    crate::mm_debug!("MouseMux v2.2 protocol: handle_key_with_conn() - Returned from handle_key_() for conn {}", conn);
 }
 
 pub fn handle_key_(evt: &KeyEvent) {
-    log::info!("MouseMux v2.2 protocol: handle_key_() called - mode={:?}, down={}", evt.mode, evt.down);
+    crate::mm_debug!("MouseMux v2.2 protocol: handle_key_() called - mode={:?}, down={}", evt.mode, evt.down);
     if EXITING.load(Ordering::SeqCst) {
         return;
     }

@@ -1,3 +1,36 @@
+// ============================================================================
+// MouseMux compile-time debug logging (Finding 13)
+//
+// These fire on EVERY keystroke and EVERY mouse event. The October 2025
+// keyboard-ID investigation added them at info! level directly in the input hot
+// path and they were never dialled back, putting synchronous log I/O on every
+// input event - the same path Finding 5's serialization lock now runs through.
+//
+// Gated on a cargo feature rather than debug_assertions ON PURPOSE: the problems
+// that need this tracing (per-connection ID assignment, MouseMux handshake
+// timing) only reproduce in release builds, so a debug-only gate would remove
+// the logging exactly when it is next needed.
+//
+//   normal release build:   cargo build --features flutter --lib --release
+//   with MouseMux tracing:  cargo build --features flutter,mousemux-debug --lib --release
+//
+// Errors, warnings, and low-frequency lifecycle events (ID assignment,
+// connection register/release, protocol handshake) are deliberately NOT gated -
+// they are rare and are what you need to diagnose a field report.
+// ============================================================================
+
+#[cfg(feature = "mousemux-debug")]
+#[macro_export]
+macro_rules! mm_debug {
+    ($($arg:tt)*) => { hbb_common::log::info!($($arg)*) };
+}
+
+#[cfg(not(feature = "mousemux-debug"))]
+#[macro_export]
+macro_rules! mm_debug {
+    ($($arg:tt)*) => {};
+}
+
 mod keyboard;
 /// cbindgen:ignore
 pub mod platform;

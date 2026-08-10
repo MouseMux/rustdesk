@@ -59,6 +59,31 @@ extern crate objc;
 
 // TODO(dustin) use interior mutability not &mut self
 
+// MouseMux per-event tracing, compile-time gated (Finding 13).
+// get_mouse_extra_info() / get_keyboard_extra_info() are called for EVERY
+// injected input event - including every mouse move - so logging there is
+// synchronous I/O at input frequency. Enable with the `mousemux-debug` feature,
+// which rustdesk's feature of the same name turns on.
+/// Logs a MouseMux per-event trace message at `info!` level.
+///
+/// Enabled by the `mousemux-debug` feature. See the note above for why these
+/// call sites must be compile-time gated rather than level-filtered.
+#[cfg(feature = "mousemux-debug")]
+#[macro_export]
+macro_rules! mm_debug {
+    ($($arg:tt)*) => { log::info!($($arg)*) };
+}
+
+/// No-op stand-in for [`mm_debug!`] when the `mousemux-debug` feature is off.
+///
+/// Expands to nothing, so there is no runtime branch and no formatting cost on
+/// the input hot path.
+#[cfg(not(feature = "mousemux-debug"))]
+#[macro_export]
+macro_rules! mm_debug {
+    ($($arg:tt)*) => {};
+}
+
 #[cfg(target_os = "windows")]
 mod win;
 #[cfg(target_os = "windows")]
