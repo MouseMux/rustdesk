@@ -43,8 +43,29 @@ const MOUSEMUX_EXITING: u32 = WM_APP + 210;              // MouseMux is exiting 
 const PROTOCOL_VERSION: u32 = 122;  // V2.2 = 122
 const RUSTDESK_VERSION: u32 = 143;  // 1.4.3 = 143
 
-// MouseMux window to find
-const MOUSEMUX_WINDOW_CLASS: &str = "mousemux.main.window.query\0";
+// MouseMux window classes to look for, in priority order.
+//
+// MouseMux versions its window class names. The C side builds them as
+// VAPI_STRING_PROGRAM_S ".main.window.query", where VAPI_STRING_PROGRAM_S is the
+// versioned program name - so MouseMux V3 registers "mousemux-v3.main.window.query",
+// NOT the unversioned name this code originally hardcoded.
+//
+// Established empirically on 2026-08-10: mousemux-common.h defines
+// MOUSEMUX_VERSIONED_NAME_DAEMON_WINDOW_32 as VAPI_STRING_PROGRAM_S ".daemon.window.32",
+// and the live window on a machine running MouseMux V3 3.0.10 has class
+// "mousemux-v3.daemon.window.32". Hence VAPI_STRING_PROGRAM_S == "mousemux-v3".
+//
+// Both v2 and v3 components can be installed side by side (a mousemux-v2-service
+// process was running alongside v3), so try newest first and fall back rather than
+// swapping one hardcoded name for another.
+//
+// NOTE: the RustDesk-side window is deliberately NOT versioned - the C header
+// declares it as the shared constant "rustdesk.mousemux.window.query".
+const MOUSEMUX_WINDOW_CLASSES: &[&str] = &[
+    "mousemux-v3.main.window.query",
+    "mousemux-v2.main.window.query",
+    "mousemux.main.window.query", // legacy / unversioned
+];
 
 // Window class and title for RustDesk's receiver window
 const WINDOW_CLASS_NAME: &str = "rustdesk.mousemux.window.query\0";
@@ -89,6 +110,12 @@ lazy_static::lazy_static! {
     static ref MESSAGE_LOOP_HANDLE: Mutex<Option<thread::JoinHandle<()>>> = Mutex::new(None);
     static ref MAIN_WINDOW_HWND: Mutex<Option<SendSyncHwnd>> = Mutex::new(None);
     static ref CONNECTED_USERS_COUNT: Mutex<usize> = Mutex::new(0);
+}
+
+lazy_static::lazy_static! {
+    /// Which MouseMux window class we last matched, so find_mousemux_window() can log
+    /// only on transitions rather than on every protocol send.
+    static ref LAST_FOUND_CLASS: Mutex<Option<String>> = Mutex::new(None);
 }
 
 /// Guards against duplicate re-registration threads (Finding 11).
@@ -673,14 +700,37 @@ fn log_outgoing_message(msg_name: &str, msg_id: u32, hwnd: HWND, wparam: WPARAM,
 /// Find MouseMux window
 fn find_mousemux_window() -> Option<HWND> {
     unsafe {
-        let class_name = CString::new(MOUSEMUX_WINDOW_CLASS.trim_end_matches('\0')).ok()?;
-        let hwnd = FindWindowA(class_name.as_ptr(), std::ptr::null());
-
-        if hwnd.is_null() {
-            None
-        } else {
-            Some(hwnd)
+        for class in MOUSEMUX_WINDOW_CLASSES {
+            let Ok(class_name) = CString::new(*class) else {
+                continue;
+            };
+            let hwnd = FindWindowA(class_name.as_ptr(), std::ptr::null());
+            if !hwnd.is_null() {
+                // Only log on a change, otherwise this fires on every protocol send.
+                let mut last = LAST_FOUND_CLASS.lock().unwrap_or_else(|e| e.into_inner());
+                if last.as_deref() != Some(*class) {
+                    log::info!(
+                        "MouseMux v2.2 protocol: found MouseMux window, class '{}' hwnd {:?}",
+                        class,
+                        hwnd
+                    );
+                    *last = Some((*class).to_string());
+                }
+                return Some(hwnd);
+            }
         }
+
+        // Not found under any known class. Log once per transition to avoid spamming;
+        // MouseMux simply not running is a normal, supported state.
+        let mut last = LAST_FOUND_CLASS.lock().unwrap_or_else(|e| e.into_inner());
+        if last.is_some() {
+            log::info!(
+                "MouseMux v2.2 protocol: MouseMux window no longer found (tried {:?})",
+                MOUSEMUX_WINDOW_CLASSES
+            );
+            *last = None;
+        }
+        None
     }
 }
 
