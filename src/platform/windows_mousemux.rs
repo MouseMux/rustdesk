@@ -40,7 +40,12 @@ const MOUSEMUX_REQUEST_EXIT: u32 = WM_APP + 200;         // MouseMux requests Ru
 const MOUSEMUX_EXITING: u32 = WM_APP + 210;              // MouseMux is exiting (reset user count)
 
 // Protocol version and RustDesk version
-const PROTOCOL_VERSION: u32 = 122;  // V2.2 = 122
+// V2.3 = 123. Bumped from 122 when the peer-name field was allowed to carry byte
+// values above 127, so MouseMux can tell which clients may send them. MouseMux
+// validates this as a range (PROTO_VERSION_MIN=121 .. PROTO_VERSION_MAX=123 in
+// rustdesk_validation.c); a MouseMux older than that rejects 123 outright, so do
+// not raise this without the matching C-side change.
+const PROTOCOL_VERSION: u32 = 123;  // V2.3 = 123
 // Reported to MouseMux in NOTIFY_STARTUP/NOTIFY_SHUTDOWN. MouseMux validates this
 // as a RANGE (VERS_MIN=100, VERS_MAX=999 in rustdesk_validation.c), not an exact
 // match, so a stale value still connects - it just misreports which RustDesk this
@@ -956,13 +961,17 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
         //    little-endian, FOUR messages per character, low byte first.
         //
         //    MouseMux accumulates four messages into one code point
-        //    (rustdesk_handler.c: `utf32 |= (byte & 0xFF) << (bytes * 8)`), and
-        //    separately validates every value against 0..=127
-        //    (rustdesk_validation.c: NAME_CHAR_MAX). Those two rules only agree for
-        //    ASCII, so non-ASCII is replaced with '?' rather than being rejected by
-        //    the validator and dropped.
+        //    (rustdesk_handler.c: `utf32 |= (byte & 0xFF) << (bytes * 8)`).
+        //
+        //    Protocol 123 widened MouseMux's per-message validator from 0..=127 to
+        //    0..=255 (rustdesk_validation.c: NAME_CHAR_MAX), so the full byte range
+        //    is now legal and non-ASCII names survive intact. Under 122 the upper
+        //    bytes of any non-ASCII character were rejected, and because a rejected
+        //    message is dropped rather than counted, that desynchronised the 4-byte
+        //    accumulator and corrupted the rest of the name - hence the previous
+        //    ASCII clamp, which is no longer needed.
         for ch in peer_info.chars() {
-            let cp = if ch.is_ascii() { ch as u32 } else { b'?' as u32 };
+            let cp = ch as u32;
 
             for shift in 0..4 {
                 let byte = (cp >> (shift * 8)) & 0xFF;
