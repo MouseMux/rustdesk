@@ -284,7 +284,10 @@ pub enum DataPortableService {
     AuthToken(String),
     AuthResult(bool),
     ConnCount(Option<usize>),
-    Mouse((Vec<u8>, i32)),
+    // Upstream 1.4.9 extended Mouse with username/argb/simulate/show_cursor for
+    // whiteboard cursor rendering. Merged with MouseMux's Key variant, which carries
+    // conn_id so the elevated process can stamp the right per-connection keyboard ID.
+    Mouse((Vec<u8>, i32, String, u32, bool, bool)),
     Pointer((Vec<u8>, i32)),
     Key((Vec<u8>, i32)),  // MouseMux V2.2: Include conn_id for per-connection keyboard IDs
     RequestStart,

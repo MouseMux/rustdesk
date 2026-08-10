@@ -40,7 +40,19 @@
 set -uo pipefail
 
 VCPKG_ROOT="${VCPKG_ROOT:-O:/devtools/vcpkg}"
+
+# Resolve CARGO_HOME properly. Under msys/git-bash $HOME is the msys home
+# (/home/<user>), NOT the Windows profile where cargo actually lives - so
+# "$HOME/.cargo" silently finds nothing and this script reports "no hwcodec
+# checkout found" while quietly doing nothing. Prefer an explicit CARGO_HOME,
+# then the Windows profile, then $HOME.
+if [ -z "${CARGO_HOME:-}" ]; then
+    for candidate in "${USERPROFILE:-}/.cargo" "/c/Users/$USER/.cargo" "C:/Users/$USER/.cargo" "$HOME/.cargo"; do
+        if [ -d "$candidate/git/checkouts" ]; then CARGO_HOME="$candidate"; break; fi
+    done
+fi
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+echo "using CARGO_HOME=$CARGO_HOME"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE="$(grep -o '"baseline": *"[0-9a-f]*"' "$REPO_ROOT/vcpkg.json" | grep -o '[0-9a-f]\{40\}')"
@@ -99,7 +111,18 @@ for BUILD_RS in "$CARGO_HOME"/git/checkouts/hwcodec-*/*/build.rs; do
     fi
     patched=1
 done
-[ "$patched" = "1" ] || echo "    WARNING: no hwcodec checkout found - run a build first, then re-run this"
+if [ "$patched" != "1" ]; then
+    echo "!!! No hwcodec checkout found under $CARGO_HOME/git/checkouts/"
+    echo "!!! Either CARGO_HOME is wrong, or cargo has not fetched hwcodec yet."
+    echo "!!! Run a build once so cargo fetches it, then re-run this script."
+    exit 1
+fi
+# NOTE: cargo creates a SEPARATE checkout directory per pinned revision. Upgrading
+# RustDesk changes the hwcodec revision in Cargo.lock, which means a brand new,
+# unpatched checkout - and the link errors come back looking mysterious
+# (unresolved swr_* / IID_IMFTransform). That is exactly what happened on the
+# 1.4.9 merge: 1.4.3 pinned 17c1dbb, 1.4.9 pins 778df1f. This loop patches every
+# checkout present, so re-running after any upgrade is the fix.
 
 echo "=== 4/4  purge hwcodec build cache ==="
 # Without this cargo silently relinks the OLD .rlib, built before the patch, and the

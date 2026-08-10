@@ -2,6 +2,8 @@
 use super::rdp_input::client::{RdpInputKeyboard, RdpInputMouse};
 use super::*;
 use crate::input::*;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use crate::whiteboard;
 #[cfg(target_os = "macos")]
 use dispatch::Queue;
 use enigo::{Enigo, Key, KeyboardControllable, MouseButton, MouseControllable};
@@ -805,18 +807,25 @@ fn get_modifier_state(key: Key, en: &mut Enigo) -> bool {
 }
 
 #[allow(unreachable_code)]
-pub fn handle_mouse(evt: &MouseEvent, conn: i32) {
+pub fn handle_mouse(
+    evt: &MouseEvent,
+    conn: i32,
+    username: String,
+    argb: u32,
+    simulate: bool,
+    show_cursor: bool,
+) {
     #[cfg(target_os = "macos")]
     {
         // having GUI (--server has tray, it is GUI too), run main GUI thread, otherwise crash
         let evt = evt.clone();
-        QUEUE.exec_async(move || handle_mouse_(&evt, conn));
+        QUEUE.exec_async(move || handle_mouse_(&evt, conn, username, argb, simulate, show_cursor));
         return;
     }
     #[cfg(windows)]
-    crate::portable_service::client::handle_mouse(evt, conn);
+    crate::portable_service::client::handle_mouse(evt, conn, username, argb, simulate, show_cursor);
     #[cfg(not(windows))]
-    handle_mouse_(evt, conn);
+    handle_mouse_(evt, conn, username, argb, simulate, show_cursor);
 }
 
 // to-do: merge handle_mouse and handle_pointer
