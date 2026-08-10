@@ -358,10 +358,16 @@ RustDesk left.
 
 ### Finding 10 — Version constant mismatch (MODERATE)
 
-**Status:** OPEN — `windows_mousemux.rs:43` sets `RUSTDESK_VERSION = 143`, but doc
-comments at `:582`/`:628` say 142 and `MOUSEMUX_PROTOCOL_V2.2.md` specifies
-Version ID 142. Harmless if MouseMux compares `>=`, breaking if it compares
-equality. **Needs confirmation against the MouseMux side.**
+**Status:** CLOSED 2026-08-10 — was never a bug, and is now moot.
+
+MouseMux validates the RustDesk version as a RANGE (`VERS_MIN=100`, `VERS_MAX=999`
+in `rustdesk_validation.c`), not an exact match, so the stale 143 always connected
+— it merely misreported which RustDesk this was in MouseMux's own logs.
+
+Since resolved properly: `RUSTDESK_VERSION` is now 149 to match the 1.4.9 base, and
+the protocol version moved 122 -> 123 alongside the widened name-byte range. The
+old `MOUSEMUX_PROTOCOL_V2.2.md` that claimed "Version ID 142" has been superseded —
+see the authority note below.
 
 ### Finding 11 — Thread spam on broadcast (MODERATE)
 
@@ -611,13 +617,21 @@ O:\GitHub\Gibster\mousemux\vapi\src\programs\apps\mousemux-main\func\extra\rustd
   rustdesk_handler.c      business logic (R2M messages)
   rustdesk_receiver.c     window + message pump
   rustdesk_state.c        client table, HWID allocation
-  docs/MOUSEMUX_PROTOCOL_V2.1.md
+  docs/MOUSEMUX_PROTOCOL_V2.3.md   <-- the authoritative spec
 ```
 Window class shared constant is in `apps/mousemux-common/mousemux_common.h:35`
 (`MOUSEMUX_SHARED_NAME_RUSTDESK_WINDOW`).
 
-**This is the authority — prefer it over `MOUSEMUX_PROTOCOL_V2.2.md`, which is
-stale in places (its table still shows protocol 121 / version 142).**
+**`docs/MOUSEMUX_PROTOCOL_V2.3.md` in that folder is now the single authoritative
+spec.** The former RustDesk-side copy (`rustdesk-development/MOUSEMUX_PROTOCOL_V2.2.md`)
+has been removed to `backups/superseded-docs/` — two copies of a spec that already
+disagreed with the code is how the peer-name encoding bug (Finding 18) survived
+unnoticed for months. Do not reintroduce a second copy; link to the C-side file.
+
+The V2.3 spec was reviewed against the implementation on 2026-08-10 and corrected:
+its window-lookup guidance prescribed `FindWindowExA(HWND_MESSAGE, NULL, cls, NULL)`,
+which returns NULL on a live system — the title is the determining factor, not the
+parent, and neither window is message-only. Version references were 142 throughout.
 
 Hard limits read from `local.h` / `rustdesk_validation.c`:
 
