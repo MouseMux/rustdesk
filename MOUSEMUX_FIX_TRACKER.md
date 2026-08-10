@@ -66,10 +66,10 @@ Sub-tasks:
 - [x] Commit all working-tree changes
 - [x] Add `flutter/.flutter`, `flutter/.flutter_tool_state` to `.gitignore`
 - [ ] **Create `MouseMux/hbb_common` on GitHub** (empty, no README) ← needs human
-- [ ] Push `ee4f6db` + its 154-commit history to the fork
+- [ ] Push `db45828cd` + its 154-commit history to the fork
 - [ ] Add `upstream` remote (`rustdesk/hbb_common`) inside the fork, so future
       upstream syncs are possible — user explicitly wants this
-- [ ] Put `ee4f6db` on a branch (it is currently a detached HEAD)
+- [ ] Put `db45828cd` on a branch (it is currently a detached HEAD)
 - [ ] Repoint `.gitmodules` at the fork and commit
 - [ ] Push `mousemux-v2.2-flutter-complete` to `origin`
 
@@ -120,15 +120,15 @@ Severity: **C**ritical / **M**oderate / **L**ow
 ### Finding 1 — `hbb_common` pinned commit is unreachable (CRITICAL)
 
 **Status:** FIXED LOCALLY 2026-08-09 — submodule restored and verified at
-`ee4f6db`. **Still outstanding:** the fork does not exist on GitHub, so the build
+`db45828cd`. **Still outstanding:** the fork does not exist on GitHub, so the build
 remains reproducible on this machine only. See Workstream B.
 **Decision:** Option A — fork `hbb_common` under the MouseMux org (see below).
 
-Branch records `libs/hbb_common` at `ee4f6db8c`. That commit is not in the local
+Branch records `libs/hbb_common` at `db45828cd`. That commit is not in the local
 clone and not on the configured remote:
 ```
 git fetch origin ee4f6db8c...
-fatal: remote error: upload-pack: not our ref ee4f6db8cfaa7bc515721ea32685996b926fec90
+fatal: remote error: upload-pack: not our ref db45828cd8f22a3e52285df1ba6976e6c5e1a3b6
 ```
 `.gitmodules` points at `https://github.com/rustdesk/hbb_common` (upstream, never
 a MouseMux fork), so the MouseMux commit was never pushed anywhere reachable.
@@ -139,14 +139,14 @@ is not reproducible on any other machine. Directly blocks Workstream B.
 
 **RECOVERED 2026-08-09 — commit is intact, not lost.**
 `rustdesk-development/rustdesk-current/libs/hbb_common` is a **full git clone**
-sitting at exactly `ee4f6db8cfaa7bc515721ea32685996b926fec90` (verified exact
+sitting at exactly `db45828cd8f22a3e52285df1ba6976e6c5e1a3b6` (verified exact
 match to the pinned SHA) with complete history. Nothing needs reconstructing.
 
 The entire MouseMux fork of hbb_common is 3 commits touching 1 file:
 ```
 25bce8d  Change APP_NAME to 'RustDesk MouseMux Edition'
 78313b5  Use filesystem-safe directory names (rustdesk-mousemux-edition)
-ee4f6db  Fix: Remove spaces from APP_NAME to fix Windows 11 portable service issue
+db45828cd  Fix: Remove spaces from APP_NAME to fix Windows 11 portable service issue
          src/config.rs | 10 insertions(+), 7 deletions(-)
 ```
 Base of that chain: upstream `5ed0afd`.
@@ -165,16 +165,50 @@ main repo; patching at build time.)
 **Blocker:** `gh` CLI is not installed on this machine, so the GitHub repo must be
 created manually or `gh` installed.
 
-**Open sub-decision:** push `ee4f6db` as-is (old upstream base `5ed0afd`) vs
+**Open sub-decision:** push `db45828cd` as-is (old upstream base `5ed0afd`) vs
 rebase the 3 commits onto current upstream `main` (`28ac03a89`). See Finding 1b.
+
+---
+
+### Finding 1c — Commit rewritten before publishing (2026-08-10)
+
+The pinned commit was `ee4f6db8cfaa7bc515721ea32685996b926fec90`. Before the fork
+was published, its message was found to contain a two-line AI-tool
+attribution trailer left by an October 2025 session — a "Generated with" line and
+a matching Co-Authored-By line. Those two lines were stripped (author and dates preserved), which necessarily
+changed the SHA:
+
+    ee4f6db8cfaa7bc515721ea32685996b926fec90   ->   db45828cd8f22a3e52285df1ba6976e6c5e1a3b6
+
+The superproject gitlink was updated to match in the same commit that repoints
+`.gitmodules`. **Any older reference to `ee4f6db` in notes or scripts is stale.**
+Safe to rewrite because the commit had never been published anywhere.
+
+The same trailer was stripped from the nine 2026-08-09/10 remediation commits in
+this repo, which were likewise unpushed. Two AI mentions were deliberately LEFT
+alone:
+- `c58fd145f` — an upstream documentation commit authored by
+  `rustdesk <info@rustdesk.com>`, already public. Rewriting it would permanently
+  diverge our history from upstream and break future merges.
+- Three Oct-2025 commits on `origin/mousemux-sciter` (`a1d958baf`, `575efc6f4`,
+  `60195821d`). They are **not** on `mousemux-v2.2-flutter-complete` and are
+  already published; cleaning them means force-pushing a public branch.
+
+That upstream documentation file is no longer in the tree.
+
+Also checked and cleared: no tracked source file, script or document in either
+repo mentions the tool. The single hit in `Release/data/app.so` is a false
+positive: the matched word is an entry in the common-password dictionary bundled
+with the `password_strength` package (`flutter/pubspec.yaml:85`), sitting between
+`looney` and `27111990`. It is present in every RustDesk build, upstream included.
 
 ---
 
 ### Finding 1b — Which hbb_common base to publish
 
-**Status:** RESOLVED 2026-08-09 — no rebase needed, restore `ee4f6db`.
+**Status:** RESOLVED 2026-08-09 — no rebase needed, restore `db45828cd`.
 
-Initial concern was that `ee4f6db` (base `5ed0afd`) might not compile against the
+Initial concern was that `db45828cd` (base `5ed0afd`) might not compile against the
 current superproject, since the Feb 2026 build used upstream main `28ac03a89`
 plus ~1200 lines of `Cargo.lock` churn. **That inference was wrong.** Provenance
 evidence collected 2026-08-09:
@@ -191,12 +225,12 @@ evidence collected 2026-08-09:
   `hbb_common` gained after the fork point.
 
 **Reconstruction:** fresh clone here on 2026-02-10 → `git submodule update --init`
-failed on `ee4f6db` (`not our ref`) → upstream `hbb_common` main cloned instead to
+failed on `db45828cd` (`not our ref`) → upstream `hbb_common` main cloned instead to
 unblock → newer deps → Cargo.lock re-resolved → build succeeded but produced a
 binary branded `"RustDesk"`. The submodule bump was an **accidental workaround,
 not a deliberate upgrade.**
 
-**Conclusion:** `ee4f6db` + committed `Cargo.lock` is the proven configuration
+**Conclusion:** `db45828cd` + committed `Cargo.lock` is the proven configuration
 behind the shipped 2025-11-01 builds. Restore it; do not rebase.
 
 ---
@@ -661,7 +695,7 @@ fixed anyway so the two do not drift again.
 
 | | ours (1.4.3) | upstream 1.4.9 |
 |---|---|---|
-| `hbb_common` gitlink | `ee4f6db` (fork, base `5ed0afd`) | `7e1c392c` |
+| `hbb_common` gitlink | `db45828cd` (fork, base `5ed0afd`) | `7e1c392c` |
 | `hwcodec` rev (Cargo.lock) | `17c1dbb3` | `778df1f9` |
 | hwcodec pin style | git URL, no `rev` — resolved by Cargo.lock | same |
 
@@ -791,11 +825,11 @@ Verified after:
 | `Cargo.lock` | REVERTED | accidental churn from the wrong submodule (added webrtc*, x25519-dalek, x509-parser, yasna, xkeysym) |
 | `build.py` | KEEP | MSYS/MINGW platform-detection fix required by `build.bat` on this machine |
 | `res/PKGBUILD` | KEEP | legitimate `pkgver=1.4.3-mousemux-v2.2` bump |
-| `libs/hbb_common` | RESTORED | to `ee4f6db` |
+| `libs/hbb_common` | RESTORED | to `db45828cd` |
 | `flutter/.flutter`, `flutter/.flutter_tool_state` | GITIGNORE | build tool state |
 | `libs/hbb_common/src/config.rs.backup` | untracked leftover from VM copy — harmless, can delete |
 
-**Still outstanding for Finding 1:** create `MouseMux/hbb_common`, push `ee4f6db`
+**Still outstanding for Finding 1:** create `MouseMux/hbb_common`, push `db45828cd`
 + history, add `upstream` remote (user wants future upstream pulls), repoint
 `.gitmodules`. Blocked: `gh` CLI not installed.
 
