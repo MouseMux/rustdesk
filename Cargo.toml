@@ -1,6 +1,6 @@
 [package]
 name = "rustdesk"
-version = "1.4.9-mousemux-v3.0"
+version = "1.4.9-mousemux-v3.1"
 authors = ["rustdesk <info@rustdesk.com>", "MouseMux Edition"]
 edition = "2021"
 build= "build.rs"
