@@ -3,7 +3,7 @@
 **Created:** 2026-08-09
 **Branch:** `mousemux-v2.2-flutter-complete`
 **Base reviewed against:** upstream `db4296533` (RustDesk 1.4.3)
-**Current version:** `1.4.3-mousemux-v2.4`
+**Current version:** `1.4.3-mousemux-v2.5`
 
 This document is the single source of truth for the remediation effort started
 2026-08-09. It lives inside the git repo so it is pullable from any machine.
@@ -113,7 +113,7 @@ Severity: **C**ritical / **M**oderate / **L**ow
 | 17 | L | Support URLs drifted between Sciter and Flutter UIs | VERIFIED in v2.4 |
 | 18 | C | Peer name encoding mismatch — RustDesk 1 msg/char vs MouseMux 4 msgs/char | VERIFIED in v2.4 |
 | 19 | L | Touch-scale path never sets `current_conn_id`, inherits a stale one | VERIFIED in v2.4 |
-| 20 | C | hwcodec build fix lives outside the repo, in the cargo cache | OPEN |
+| 20 | C | hwcodec build fix lives outside the repo, in the cargo cache | RESOLVED in v2.5 |
 
 ---
 
@@ -566,11 +566,36 @@ ffmpeg_ram_decode(218)  error C2039: 'key_frame' is not a member of 'AVFrame'
 ```
 The 2025-11-01 builds were made against an older FFmpeg, on the VM.
 
-**Decision 2026-08-09:** ship v2.3 without hwcodec, clearly labelled, and fold
-hwcodec into the RustDesk 1.4.9 upgrade — a newer RustDesk should pin a newer
-hwcodec that supports current FFmpeg, solving both problems at once. Alternatives
-declined: downgrading the shared vcpkg FFmpeg to 6.x; patching hwcodec's C++ as a
-third out-of-repo patch.
+**RESOLVED 2026-08-10 — and the earlier diagnosis was incomplete.**
+
+The real cause was never hwcodec. `vcpkg.json` pins baseline
+`120deac3062162151622ca4860575a33844ba10b`, which is **FFmpeg 7.1.1** — the
+project already declared the correct version. This machine's vcpkg tree had
+drifted two majors ahead to 8.0.1, and FFmpeg 8.0 removed both APIs hwcodec uses.
+Verified directly against the FFmpeg release tags:
+
+| symbol | n7.1.1 | n8.0 |
+|--------|--------|------|
+| `FF_PROFILE_H264_HIGH` | present | removed |
+| `AVFrame::key_frame`   | present | removed |
+
+Note the earlier expectation that upgrading to 1.4.9 would fix this "for free" was
+**wrong** — 1.4.9's newer hwcodec (`778df1f9`) guards `key_frame` but still uses
+`FF_PROFILE_*` unguarded, so it fails against FFmpeg 8 too. Fixing the FFmpeg
+version is the only route, and it fixes both 1.4.3 and 1.4.9 (their vcpkg
+baselines are identical).
+
+Fix applied: pinned the vcpkg ports tree to the manifest baseline and installed
+`ffmpeg[core,amf,nvcodec,qsv]:x64-windows-static` (20 min build). The feature list
+matters — a bare `vcpkg install ffmpeg` builds defaults and silently omits every
+hardware encoder.
+
+Verified in the v2.5 binary: `avcodec` ×211, `nvenc` ×14, `qsv` ×26, `amf` ×28;
+`librustdesk.dll` grew 28.5 MB → 45.8 MB. `Cargo.lock` was completely unchanged,
+confirming hwcodec needed no dependency movement at all.
+
+`tools/setup-hwcodec.sh` now pins the baseline itself, so this is reproducible on
+any machine rather than being one person's cargo cache.
 
 ---
 

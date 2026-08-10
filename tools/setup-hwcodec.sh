@@ -17,35 +17,67 @@
 #
 # Idempotent - safe to run repeatedly.
 #
-# !!! NOT SUFFICIENT ON ITS OWN AS OF 2026-08-09 !!!
-# This script fixes the LINKAGE problem documented in BUGFIXES.md, and that part
-# works. But hwcodec 0.7.1 (the revision RustDesk 1.4.3 pins) will still fail to
-# COMPILE against FFmpeg 7.0+ because of API removals:
+# THE FFMPEG VERSION MATTERS - THIS IS THE PART THAT BITES
+#
+# hwcodec 0.7.1 (pinned by RustDesk 1.4.3 AND 1.4.9) compiles only against
+# FFmpeg 7.x. It uses two APIs that FFmpeg 8.0 removed:
 #     util.cpp:59,61         FF_PROFILE_H264_HIGH / FF_PROFILE_HEVC_MAIN
-#                            -> renamed to AV_PROFILE_*
-#     ffmpeg_ram_decode:218  AVFrame::key_frame  -> replaced by AV_FRAME_FLAG_KEY
-# This machine's vcpkg has FFmpeg 8.0.1 (libavutil 60.8), so hwcodec cannot be
-# built here until either RustDesk is upgraded to a version pinning a newer
-# hwcodec, or FFmpeg is downgraded to 6.x, or the hwcodec C++ is patched.
-# Tracked as Finding 20.
+#     ffmpeg_ram_decode:218  AVFrame::key_frame
+#
+# Verified 2026-08-10 against the FFmpeg release tags:
+#     n7.1.1 -> both present      n8.0 -> both gone
+#
+# `vcpkg.json` pins baseline 120deac3062162151622ca4860575a33844ba10b, which is
+# FFmpeg 7.1.1 - i.e. the project already declares the correct version. The
+# failure mode is a vcpkg tree that has drifted AHEAD of the baseline: install
+# FFmpeg 8.x and hwcodec stops compiling, with C++ errors that look like a hwcodec
+# bug but are not. Upgrading RustDesk does NOT help; 1.4.9's newer hwcodec still
+# uses FF_PROFILE_* unguarded.
+#
+# This script therefore pins the vcpkg ports tree to the manifest baseline before
+# installing. See MOUSEMUX_FIX_TRACKER.md, Finding 20.
 
 set -uo pipefail
 
 VCPKG_ROOT="${VCPKG_ROOT:-O:/devtools/vcpkg}"
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 
-echo "=== 1/3  vcpkg: mfx-dispatch (Intel Media SDK dispatcher) ==="
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BASELINE="$(grep -o '"baseline": *"[0-9a-f]*"' "$REPO_ROOT/vcpkg.json" | grep -o '[0-9a-f]\{40\}')"
+
+echo "=== 1/4  pin vcpkg ports tree to the manifest baseline ==="
+echo "    baseline from vcpkg.json: $BASELINE"
+PREV="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
+echo "    current vcpkg HEAD:       $PREV   (restore with: git -C '$VCPKG_ROOT' checkout $PREV)"
+if [ "$PREV" != "$BASELINE" ]; then
+    if ! git -C "$VCPKG_ROOT" diff --quiet; then
+        echo "!!! vcpkg tree has local modifications - refusing to switch. Resolve first."
+        exit 1
+    fi
+    git -C "$VCPKG_ROOT" checkout -q "$BASELINE" || { echo "!!! checkout failed"; exit 1; }
+    echo "    switched to baseline"
+else
+    echo "    already at baseline"
+fi
+
+echo "=== 2/4  vcpkg: ffmpeg (7.1.1) + mfx-dispatch ==="
 # --classic is REQUIRED: without it vcpkg finds a vcpkg.json, switches to manifest
 # mode, and refuses named packages. Manifest mode would also install into a
 # project-local vcpkg_installed/ rather than the global tree that build.rs reads.
+#
+# The feature list is NOT optional. A bare `vcpkg install ffmpeg` builds the
+# default feature set, which omits the hardware encoders - you get a build that
+# links and runs but has no hardware acceleration at all.
+"$VCPKG_ROOT/vcpkg.exe" install "ffmpeg[core,amf,nvcodec,qsv]:x64-windows-static" --classic --recurse \
+    || { echo "!!! ffmpeg install failed"; exit 1; }
 if [ -f "$VCPKG_ROOT/installed/x64-windows-static/lib/libmfx.lib" ]; then
-    echo "    already installed, skipping"
+    echo "    mfx-dispatch already installed"
 else
     "$VCPKG_ROOT/vcpkg.exe" install mfx-dispatch:x64-windows-static --classic \
         || { echo "!!! vcpkg install failed"; exit 1; }
 fi
 
-echo "=== 2/3  patch hwcodec build.rs ==="
+echo "=== 3/4  patch hwcodec build.rs ==="
 # Two link fixes: FFmpeg audio resampling, and Windows Media Foundation.
 patched=0
 for BUILD_RS in "$CARGO_HOME"/git/checkouts/hwcodec-*/*/build.rs; do
@@ -69,10 +101,10 @@ for BUILD_RS in "$CARGO_HOME"/git/checkouts/hwcodec-*/*/build.rs; do
 done
 [ "$patched" = "1" ] || echo "    WARNING: no hwcodec checkout found - run a build first, then re-run this"
 
-echo "=== 3/3  purge hwcodec build cache ==="
+echo "=== 4/4  purge hwcodec build cache ==="
 # Without this cargo silently relinks the OLD .rlib, built before the patch, and the
 # fix appears to have done nothing.
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="$REPO_ROOT"
 rm -rf "$REPO"/target/release/.fingerprint/hwcodec-* \
        "$REPO"/target/release/build/hwcodec-* \
        "$REPO"/target/release/deps/*hwcodec* \
@@ -84,4 +116,9 @@ echo "Done. Now build with:"
 echo "  cargo build --features flutter,hwcodec --lib --release"
 echo
 echo "Verify afterwards - the DLL must reference the codec libs:"
-echo "  grep -c 'avcodec' target/release/librustdesk.dll   # expect > 0"
+echo "  grep -c 'avcodec' target/release/librustdesk.dll   # expect ~200"
+echo "  grep -c 'nvenc'   target/release/librustdesk.dll   # NVIDIA"
+echo "  grep -c 'qsv'     target/release/librustdesk.dll   # Intel"
+echo "  grep -c 'amf'     target/release/librustdesk.dll   # AMD"
+echo
+echo "A hwcodec-enabled librustdesk.dll is roughly 45 MB; without it, roughly 28 MB." 
