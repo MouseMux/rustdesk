@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -24,19 +23,37 @@ class TerminalModel with ChangeNotifier {
   bool _disposed = false;
 
   final _inputBuffer = <String>[];
+  // Buffer for output data received before terminal view has valid dimensions.
+  // This prevents NaN errors when writing to terminal before layout is complete.
+  final _pendingOutputChunks = <String>[];
+  final _pendingOutputSuppressFlags = <bool>[];
+  int _pendingOutputSize = 0;
+  static const int _kMaxOutputBufferChars = 8 * 1024;
+  // View ready state: true when terminal has valid dimensions, safe to write
+  bool _terminalViewReady = false;
+  bool _markViewReadyScheduled = false;
+  bool _suppressTerminalOutput = false;
+  bool _suppressNextTerminalDataOutput = false;
 
-  bool get isPeerWindows => parent.ffiModel.pi.platform == kPeerPlatformWindows;
+  void Function(int w, int h, int pw, int ph)? onResizeExternal;
+
+  /// Called when the terminal session ends (shell exits).
+  /// The listener (typically TerminalPage) can use this to auto-close the tab/page.
+  VoidCallback? onClosed;
 
   Future<void> _handleInput(String data) async {
-    // If we press the `Enter` button on Android,
-    // `data` can be '\r' or '\n' when using different keyboards.
-    // Android -> Windows. '\r' works, but '\n' does not. '\n' is just a newline.
-    // Android -> Linux. Both '\r' and '\n' work as expected (execute a command).
-    // So when we receive '\n', we may need to convert it to '\r' to ensure compatibility.
-    // Desktop -> Desktop works fine.
-    // Check if we are on mobile or web(mobile), and convert '\n' to '\r'.
+    // Soft keyboards (notably iOS) emit '\n' when Enter is pressed, while a
+    // real keyboard's Enter sends '\r'. Some Android keyboards also emit '\n'.
+    // - Peer Windows: '\r' works, '\n' is just a newline.
+    // - Peer Linux: canonical-mode shells accept both, but raw-mode apps
+    //   (readline, prompt_toolkit, vim, TUI frameworks) expect '\r'.
+    // - Peer macOS: same as Linux, raw-mode apps expect '\r'
+    //   (https://github.com/rustdesk/rustdesk/issues/14907).
+    // So on mobile / web-mobile, always normalize a lone '\n' to '\r'.
+    // We deliberately do not touch multi-character payloads (e.g. pasted text)
+    // so embedded newlines in pasted content are preserved.
     final isMobileOrWebMobile = (isMobile || (isWeb && !isWebDesktop));
-    if (isMobileOrWebMobile && isPeerWindows && data == '\n') {
+    if (isMobileOrWebMobile && data == '\n') {
       data = '\r';
     }
     if (_terminalOpened) {
@@ -61,13 +78,26 @@ class TerminalModel with ChangeNotifier {
     terminalController = TerminalController();
 
     // Setup terminal callbacks
-    terminal.onOutput = _handleInput;
+    terminal.onOutput = (data) {
+      if (_suppressTerminalOutput) return;
+      _handleInput(data);
+    };
 
     terminal.onResize = (w, h, pw, ph) async {
       // Validate all dimensions before using them
       if (w > 0 && h > 0 && pw > 0 && ph > 0) {
         debugPrint(
             '[TerminalModel] Terminal resized to ${w}x$h (pixel: ${pw}x$ph)');
+
+        // This piece of code must be placed before the conditional check in order to initialize properly.
+        onResizeExternal?.call(w, h, pw, ph);
+
+        // Mark terminal view as ready and flush any buffered output on first valid resize.
+        // Must be after onResizeExternal so the view layer has valid dimensions before flushing.
+        if (!_terminalViewReady) {
+          _scheduleMarkViewReady();
+        }
+
         if (_terminalOpened) {
           // Notify remote terminal of resize
           try {
@@ -91,14 +121,16 @@ class TerminalModel with ChangeNotifier {
   void onReady() {
     parent.dialogManager.dismissAll();
 
-    // Fire and forget - don't block onReady
-    openTerminal().catchError((e) {
+    // Fire and forget - don't block onReady. If the transport reconnects while
+    // this model is still open, re-send OpenTerminal so the remote service marks
+    // the persistent session active again and resumes output streaming.
+    openTerminal(force: _terminalOpened).catchError((e) {
       debugPrint('[TerminalModel] Error opening terminal: $e');
     });
   }
 
-  Future<void> openTerminal() async {
-    if (_terminalOpened) return;
+  Future<void> openTerminal({bool force = false}) async {
+    if (_terminalOpened && !force) return;
     // Request the remote side to open a terminal with default shell
     // The remote side will decide which shell to use based on its OS
 
@@ -135,9 +167,13 @@ class TerminalModel with ChangeNotifier {
       debugPrint('[TerminalModel] Error calling sessionOpenTerminal: $e');
       // Optionally show error to user
       if (e is TimeoutException) {
-        terminal.write('Failed to open terminal: Connection timeout\r\n');
+        _writeToTerminal('Failed to open terminal: Connection timeout\r\n');
       }
     }
+  }
+
+  Future<void> sendVirtualKey(String data) async {
+    return _handleInput(data);
   }
 
   Future<void> closeTerminal() async {
@@ -214,6 +250,33 @@ class TerminalModel with ChangeNotifier {
     }
   }
 
+  static int getExitCodeFromEvt(Map<String, dynamic> evt) {
+    if (evt.containsKey('exit_code')) {
+      final v = evt['exit_code'];
+      if (v is int) {
+        // Desktop and mobile send exit_code as an int
+        return v;
+      } else if (v is String) {
+        // Web sends exit_code as a string
+        final parsed = int.tryParse(v);
+        if (parsed != null) {
+          return parsed;
+        } else {
+          debugPrint(
+              '[TerminalModel] Failed to parse exit_code as integer: $v. Expected a numeric string.');
+          return 0;
+        }
+      } else {
+        debugPrint(
+            '[TerminalModel] Unexpected exit_code type: ${v.runtimeType}, value: $v. Expected int or String.');
+        return 0;
+      }
+    } else {
+      debugPrint('[TerminalModel] Event does not contain exit_code');
+      return 0;
+    }
+  }
+
   void handleTerminalResponse(Map<String, dynamic> evt) {
     final String? type = evt['type'];
     final int evtTerminalId = getTerminalIdFromEvt(evt);
@@ -243,8 +306,8 @@ class TerminalModel with ChangeNotifier {
 
   void _handleTerminalOpened(Map<String, dynamic> evt) {
     final bool success = getSuccessFromEvt(evt);
-    final String message = evt['message'] ?? '';
-    final String? serviceId = evt['service_id'];
+    final String message = evt['message']?.toString() ?? '';
+    final String? serviceId = evt['service_id']?.toString();
 
     debugPrint(
         '[TerminalModel] Terminal opened response: success=$success, message=$message, service_id=$serviceId');
@@ -252,7 +315,21 @@ class TerminalModel with ChangeNotifier {
     if (success) {
       _terminalOpened = true;
 
-      // Service ID is now saved on the Rust side in handle_terminal_response
+      // On reconnect, the server may replay recent output. That replay can include
+      // terminal queries like DSR/DA; xterm answers them through onOutput as
+      // "^[[1;1R^[[2;2R^[[>0;0;0c", which must not be sent back to the peer.
+      final replayTerminalOutput = evt['replay_terminal_output'];
+      _suppressNextTerminalDataOutput = replayTerminalOutput == true ||
+          message == 'Reconnected to existing terminal with pending output';
+
+      // Fallback: if terminal view is not yet ready but already has valid
+      // dimensions (e.g. layout completed before open response arrived),
+      // mark view ready now to avoid output stuck in buffer indefinitely.
+      if (!_terminalViewReady &&
+          terminal.viewWidth > 0 &&
+          terminal.viewHeight > 0) {
+        _scheduleMarkViewReady();
+      }
 
       // Process any buffered input
       _processBufferedInputAsync().then((_) {
@@ -263,17 +340,21 @@ class TerminalModel with ChangeNotifier {
       });
 
       final persistentSessions =
-          evt['persistent_sessions'] as List<dynamic>? ?? [];
+          (evt['persistent_sessions'] as List<dynamic>? ?? [])
+              .whereType<int>()
+              .where((id) => !parent.terminalModels.containsKey(id))
+              .toList();
       if (kWindowId != null && persistentSessions.isNotEmpty) {
         DesktopMultiWindow.invokeMethod(
             kWindowId!,
             kWindowEventRestoreTerminalSessions,
             jsonEncode({
+              'peer_id': id,
               'persistent_sessions': persistentSessions,
             }));
       }
     } else {
-      terminal.write('Failed to open terminal: $message\r\n');
+      _writeToTerminal('Failed to open terminal: $message\r\n');
     }
   }
 
@@ -298,6 +379,8 @@ class TerminalModel with ChangeNotifier {
     final data = evt['data'];
 
     if (data != null) {
+      final suppressTerminalOutput = _suppressNextTerminalDataOutput;
+      _suppressNextTerminalDataOutput = false;
       try {
         String text = '';
         if (data is String) {
@@ -317,29 +400,129 @@ class TerminalModel with ChangeNotifier {
           return;
         }
 
-        terminal.write(text);
+        _writeToTerminal(text, suppressTerminalOutput: suppressTerminalOutput);
       } catch (e) {
         debugPrint('[TerminalModel] Failed to process terminal data: $e');
       }
     }
   }
 
+  /// Write text to terminal, buffering if the view is not yet ready.
+  /// All terminal output should go through this method to avoid NaN errors
+  /// from writing before the terminal view has valid layout dimensions.
+  void _writeToTerminal(
+    String text, {
+    bool suppressTerminalOutput = false,
+  }) {
+    if (!_terminalViewReady) {
+      // If a single chunk exceeds the cap, keep only its tail.
+      // Note: truncation may split a multi-byte ANSI escape sequence,
+      // which can cause a brief visual glitch on flush. This is acceptable
+      // because it only affects the pre-layout buffering window and the
+      // terminal will self-correct on subsequent output.
+      if (text.length >= _kMaxOutputBufferChars) {
+        final truncated = text.substring(text.length - _kMaxOutputBufferChars);
+        _pendingOutputChunks
+          ..clear()
+          ..add(truncated);
+        _pendingOutputSuppressFlags
+          ..clear()
+          ..add(suppressTerminalOutput);
+        _pendingOutputSize = truncated.length;
+      } else {
+        _pendingOutputChunks.add(text);
+        _pendingOutputSuppressFlags.add(suppressTerminalOutput);
+        _pendingOutputSize += text.length;
+        // Drop oldest chunks if exceeds limit (whole chunks to preserve ANSI sequences)
+        while (_pendingOutputSize > _kMaxOutputBufferChars &&
+            _pendingOutputChunks.length > 1) {
+          final removed = _pendingOutputChunks.removeAt(0);
+          _pendingOutputSuppressFlags.removeAt(0);
+          _pendingOutputSize -= removed.length;
+        }
+      }
+      return;
+    }
+    _writeTerminalChunk(text, suppressTerminalOutput: suppressTerminalOutput);
+  }
+
+  void _flushOutputBuffer() {
+    if (_pendingOutputChunks.isEmpty) return;
+    debugPrint(
+        '[TerminalModel] Flushing $_pendingOutputSize buffered chars (${_pendingOutputChunks.length} chunks)');
+    for (var i = 0; i < _pendingOutputChunks.length; i++) {
+      _writeTerminalChunk(
+        _pendingOutputChunks[i],
+        suppressTerminalOutput: _pendingOutputSuppressFlags[i],
+      );
+    }
+    _pendingOutputChunks.clear();
+    _pendingOutputSuppressFlags.clear();
+    _pendingOutputSize = 0;
+  }
+
+  void _writeTerminalChunk(
+    String text, {
+    required bool suppressTerminalOutput,
+  }) {
+    if (!suppressTerminalOutput) {
+      terminal.write(text);
+      return;
+    }
+    final previous = _suppressTerminalOutput;
+    _suppressTerminalOutput = true;
+    try {
+      terminal.write(text);
+    } finally {
+      _suppressTerminalOutput = previous;
+    }
+  }
+
+  /// Mark terminal view as ready and flush buffered output.
+  void _scheduleMarkViewReady() {
+    if (_disposed || _terminalViewReady || _markViewReadyScheduled) return;
+    _markViewReadyScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _markViewReadyScheduled = false;
+      if (_disposed || _terminalViewReady) return;
+      if (terminal.viewWidth > 0 && terminal.viewHeight > 0) {
+        _markViewReady();
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _markViewReady() {
+    if (_terminalViewReady) return;
+    _terminalViewReady = true;
+    _flushOutputBuffer();
+  }
+
   void _handleTerminalClosed(Map<String, dynamic> evt) {
-    final int exitCode = evt['exit_code'] ?? 0;
-    terminal.write('\r\nTerminal closed with exit code: $exitCode\r\n');
+    final int exitCode = getExitCodeFromEvt(evt);
+    _writeToTerminal('\r\nTerminal closed with exit code: $exitCode\r\n');
     _terminalOpened = false;
     notifyListeners();
+    // Auto-close the tab/page
+    onClosed?.call();
   }
 
   void _handleTerminalError(Map<String, dynamic> evt) {
     final String message = evt['message'] ?? 'Unknown error';
-    terminal.write('\r\nTerminal error: $message\r\n');
+    _writeToTerminal('\r\nTerminal error: $message\r\n');
   }
 
   @override
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    // Clear buffers to free memory
+    _inputBuffer.clear();
+    _pendingOutputChunks.clear();
+    _pendingOutputSuppressFlags.clear();
+    _pendingOutputSize = 0;
+    _markViewReadyScheduled = false;
+    _suppressNextTerminalDataOutput = false;
     // Terminal cleanup is handled server-side when service closes
     super.dispose();
   }

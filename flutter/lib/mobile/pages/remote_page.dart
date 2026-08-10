@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +13,6 @@ import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../common.dart';
 import '../../common/widgets/overlay.dart';
@@ -25,6 +23,7 @@ import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../utils/image.dart';
 import '../widgets/dialog.dart';
+import '../widgets/custom_scale_widget.dart';
 
 final initText = '1' * 1024;
 
@@ -65,9 +64,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool _showGestureHelp = false;
   String _value = '';
   Orientation? _currentOrientation;
-  double _viewInsetsBottom = 0;
-
-  Timer? _timerDidChangeMetrics;
+  final _uniqueKey = UniqueKey();
+  Timer? _iosKeyboardWorkaroundTimer;
 
   final _blockableOverlayState = BlockableOverlayState();
 
@@ -76,6 +74,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final FocusNode _mobileFocusNode = FocusNode();
   final FocusNode _physicalFocusNode = FocusNode();
   var _showEdit = false; // use soft keyboard
+
+  Worker? _waylandKeyboardGateWorker;
+  bool _waylandKeyboardGateInitialized = false;
 
   InputModel get inputModel => gFFI.inputModel;
   SessionID get sessionId => gFFI.sessionId;
@@ -104,9 +105,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       gFFI.dialogManager
           .showLoading(translate('Connecting...'), onCancel: closeConnection);
     });
-    if (!isWeb) {
-      WakelockPlus.enable();
-    }
+    WakelockManager.enable(_uniqueKey);
     _physicalFocusNode.requestFocus();
     gFFI.inputModel.listenToMouse(true);
     gFFI.qualityMonitorModel.checkShowQualityMonitor(sessionId);
@@ -125,11 +124,33 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           isKeyboardVisible: keyboardVisibilityController.isVisible);
     });
     WidgetsBinding.instance.addObserver(this);
+
+    inputModel.keyboardInputAllowed = true;
+
+    // Wayland sessions may use clipboard-based text input on the controlled side.
+    // Require explicit user confirmation before allowing soft-keyboard and
+    // clipboard-assisted text input. Physical keyboard events are not gated here.
+    _waylandKeyboardGateWorker = ever(gFFI.ffiModel.pi.isSet, (bool isSet) {
+      if (isSet) {
+        _initWaylandKeyboardGateIfNeeded();
+      }
+    });
+    if (gFFI.ffiModel.pi.isSet.value) {
+      _initWaylandKeyboardGateIfNeeded();
+    }
   }
 
   @override
   Future<void> dispose() async {
     WidgetsBinding.instance.removeObserver(this);
+    // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
+    // after several awaits (canvas save, image update, the `enable_soft_keyboard`
+    // platform call), so if the app is backgrounded while this page is disposing,
+    // dispose can be suspended before reaching it and the connection is never torn
+    // down. The reconnect then re-attaches to the leaked session and is stuck on
+    // "Connecting...". Dispatching it here makes teardown happen synchronously on
+    // pop; the `sessionClose` in `gFFI.close()` becomes a no-op once removed.
+    unawaited(bind.sessionClose(sessionId: sessionId));
     // https://github.com/flutter/flutter/issues/64935
     super.dispose();
     gFFI.dialogManager.hideMobileActionsOverlay(store: false);
@@ -139,15 +160,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     await gFFI.invokeMethod("enable_soft_keyboard", true);
     _mobileFocusNode.dispose();
     _physicalFocusNode.dispose();
+    clearWaylandKeyboardPromptSuppressedForConnection(sessionId.toString());
+    _waylandKeyboardGateWorker?.dispose();
+    inputModel.keyboardInputAllowed = true;
     await gFFI.close();
     _timer?.cancel();
-    _timerDidChangeMetrics?.cancel();
+    _iosKeyboardWorkaroundTimer?.cancel();
     gFFI.dialogManager.dismissAll();
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
         overlays: SystemUiOverlay.values);
-    if (!isWeb) {
-      await WakelockPlus.disable();
-    }
+    WakelockManager.disable(_uniqueKey);
     await keyboardSubscription.cancel();
     removeSharedStates(widget.id);
     // `on_voice_call_closed` should be called when the connection is ended.
@@ -169,24 +191,38 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     gFFI.invokeMethod("try_sync_clipboard");
   }
 
-  @override
-  void didChangeMetrics() {
-    // If the soft keyboard is visible and the canvas has been changed(panned or scaled)
-    // Don't try reset the view style and focus the cursor.
-    if (gFFI.cursorModel.lastKeyboardIsVisible &&
-        gFFI.canvasModel.isMobileCanvasChanged) {
+  bool _shouldGateKeyboardForWayland() {
+    if (!(isAndroid || isIOS)) return false;
+    final pi = gFFI.ffiModel.pi;
+    return pi.platform == kPeerPlatformLinux && pi.isWayland;
+  }
+
+  void _initWaylandKeyboardGateIfNeeded() {
+    if (!mounted) return;
+    if (_waylandKeyboardGateInitialized) return;
+    if (!_shouldGateKeyboardForWayland()) return;
+
+    _waylandKeyboardGateInitialized = true;
+
+    final allowWaylandKeyboard =
+        mainGetPeerBoolOptionSync(widget.id, kPeerOptionAllowWaylandKeyboard);
+    if (!shouldShowWaylandKeyboardPrompt(
+      connectionId: sessionId.toString(),
+      isWaylandPeer: _shouldGateKeyboardForWayland(),
+      allowWaylandKeyboardRemembered: allowWaylandKeyboard,
+    )) {
+      inputModel.keyboardInputAllowed = true;
       return;
     }
 
-    final newBottom = MediaQueryData.fromView(ui.window).viewInsets.bottom;
-    _timerDidChangeMetrics?.cancel();
-    _timerDidChangeMetrics = Timer(Duration(milliseconds: 100), () async {
-      // We need this comparation because poping up the floating action will also trigger `didChangeMetrics()`.
-      if (newBottom != _viewInsetsBottom) {
-        gFFI.canvasModel.mobileFocusCanvasCursor();
-        _viewInsetsBottom = newBottom;
-      }
-    });
+    inputModel.keyboardInputAllowed = false;
+
+    // Ensure soft keyboard is not active before user confirms.
+    _showEdit = false;
+    gFFI.invokeMethod("enable_soft_keyboard", false);
+    _mobileFocusNode.unfocus();
+    _physicalFocusNode.requestFocus();
+    setState(() {});
   }
 
   // to-do: It should be better to use transparent color instead of the bgColor.
@@ -210,7 +246,24 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           gFFI.ffiModel.pi.version.isNotEmpty) {
         gFFI.invokeMethod("enable_soft_keyboard", false);
       }
+
+      // Workaround for iOS: physical keyboard input fails after virtual keyboard is hidden
+      // https://github.com/flutter/flutter/issues/39900
+      // https://github.com/rustdesk/rustdesk/discussions/11843#discussioncomment-13499698 - Virtual keyboard issue
+      if (isIOS) {
+        _iosKeyboardWorkaroundTimer?.cancel();
+        _iosKeyboardWorkaroundTimer = Timer(Duration(milliseconds: 100), () {
+          if (!mounted) return;
+          _physicalFocusNode.unfocus();
+          _iosKeyboardWorkaroundTimer = Timer(Duration(milliseconds: 50), () {
+            if (!mounted) return;
+            _physicalFocusNode.requestFocus();
+          });
+        });
+      }
     } else {
+      _iosKeyboardWorkaroundTimer?.cancel();
+      _iosKeyboardWorkaroundTimer = null;
       _timer?.cancel();
       _timer = Timer(kMobileDelaySoftKeyboardFocus, () {
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
@@ -303,7 +356,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 content == '【】')) {
           // can not only input content[0], because when input ], [ are also auo insert, which cause ] never be input
           bind.sessionInputString(sessionId: sessionId, value: content);
-          openKeyboard();
+          _openKeyboardUnlocked();
           return;
         }
         bind.sessionInputString(sessionId: sessionId, value: content);
@@ -315,6 +368,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   // handle mobile virtual keyboard
   void handleSoftKeyboardInput(String newValue) {
+    if (!inputModel.keyboardInputAllowed) {
+      return;
+    }
     if (isIOS) {
       _handleIOSSoftKeyboardInput(newValue);
     } else {
@@ -323,6 +379,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void inputChar(String char) {
+    if (!inputModel.keyboardInputAllowed) {
+      return;
+    }
     if (char == '\n') {
       char = 'VK_RETURN';
     } else if (char == ' ') {
@@ -332,6 +391,29 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void openKeyboard() {
+    final allowWaylandKeyboard =
+        mainGetPeerBoolOptionSync(widget.id, kPeerOptionAllowWaylandKeyboard);
+    if (shouldShowWaylandKeyboardPrompt(
+      connectionId: sessionId.toString(),
+      isWaylandPeer: _shouldGateKeyboardForWayland(),
+      allowWaylandKeyboardRemembered: allowWaylandKeyboard,
+    )) {
+      inputModel.keyboardInputAllowed = false;
+      showWaylandKeyboardInputWarningDialog(
+        id: widget.id,
+        connectionId: sessionId.toString(),
+        ffi: gFFI,
+        onEnable: () async {
+          _openKeyboardUnlocked();
+        },
+      );
+      return;
+    }
+    _openKeyboardUnlocked();
+  }
+
+  void _openKeyboardUnlocked() {
+    inputModel.keyboardInputAllowed = true;
     gFFI.invokeMethod("enable_soft_keyboard", true);
     // destroy first, so that our _value trick can work
     _value = initText;
@@ -365,7 +447,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
     return WillPopScope(
       onWillPop: () async {
-        clientClose(sessionId, gFFI.dialogManager);
+        clientClose(sessionId, gFFI);
         return false;
       },
       child: Scaffold(
@@ -483,7 +565,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       color: Colors.white,
                       icon: Icon(Icons.clear),
                       onPressed: () {
-                        clientClose(sessionId, gFFI.dialogManager);
+                        clientClose(sessionId, gFFI);
                       },
                     ),
                     IconButton(
@@ -568,7 +650,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   bool get showCursorPaint =>
-      !gFFI.ffiModel.isPeerAndroid && !gFFI.canvasModel.cursorEmbedded;
+      !gFFI.ffiModel.isPeerAndroid &&
+      !gFFI.canvasModel.cursorEmbedded &&
+      !gFFI.inputModel.relativeMouseMode.value;
 
   Widget getBodyForMobile() {
     final keyboardIsVisible = keyboardVisibilityController.isVisible;
@@ -576,7 +660,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final paints = [
-            ImagePaint(),
+            ImagePaint(ffiModel: gFFI.ffiModel),
             Positioned(
               top: 10,
               right: 10,
@@ -634,7 +718,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget getBodyForDesktopWithListener() {
     final ffiModel = Provider.of<FfiModel>(context);
-    var paints = <Widget>[ImagePaint()];
+    var paints = <Widget>[ImagePaint(ffiModel: ffiModel)];
     if (showCursorPaint) {
       final cursor = bind.sessionGetToggleOptionSync(
           sessionId: sessionId, arg: 'show-remote-cursor');
@@ -807,6 +891,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 bind.mainSetLocalOption(key: kOptionTouchMode, value: v);
               },
               virtualMouseMode: gFFI.ffiModel.virtualMouseMode,
+              inputModel: gFFI.inputModel,
             )));
   }
 
@@ -1054,11 +1139,20 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
 }
 
 class ImagePaint extends StatelessWidget {
+  final FfiModel ffiModel;
+  ImagePaint({Key? key, required this.ffiModel}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     final m = Provider.of<ImageModel>(context);
     final c = Provider.of<CanvasModel>(context);
     var s = c.scale;
+    if (ffiModel.isPeerLinux) {
+      final displays = ffiModel.pi.getCurDisplays();
+      if (displays.isNotEmpty) {
+        s = s / displays[0].scale;
+      }
+    }
     final adjust = c.getAdjustY();
     return CustomPaint(
       painter: ImagePainter(
@@ -1126,9 +1220,21 @@ void showOptions(
   if (image != null) {
     displays.add(Padding(padding: const EdgeInsets.only(top: 8), child: image));
   }
-  if (pi.displays.length > 1 && pi.currentDisplay != kAllDisplayValue) {
+  final privacyModeState = PrivacyModeState.find(id);
+  if (pi.displays.length > 1 &&
+      pi.currentDisplay != kAllDisplayValue &&
+      (privacyModeState.isEmpty ||
+          allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value))) {
     final cur = pi.currentDisplay;
     final children = <Widget>[];
+    final isDarkTheme = MyTheme.currentThemeMode() == ThemeMode.dark;
+    final numColorSelected = Colors.white;
+    final numColorUnselected = isDarkTheme ? Colors.grey : Colors.black87;
+    // We can't use `Theme.of(context).primaryColor` here, the color is:
+    // - light theme: 0xff2196f3 (Colors.blue)
+    // - dark theme: 0xff212121 (the canvas color?)
+    final numBgSelected =
+        Theme.of(context).colorScheme.primary.withOpacity(0.6);
     for (var i = 0; i < pi.displays.length; ++i) {
       children.add(InkWell(
           onTap: () {
@@ -1142,13 +1248,12 @@ void showOptions(
               decoration: BoxDecoration(
                   border: Border.all(color: Theme.of(context).hintColor),
                   borderRadius: BorderRadius.circular(2),
-                  color: i == cur
-                      ? Theme.of(context).primaryColor.withOpacity(0.6)
-                      : null),
+                  color: i == cur ? numBgSelected : null),
               child: Center(
                   child: Text((i + 1).toString(),
                       style: TextStyle(
-                          color: i == cur ? Colors.white : Colors.black87,
+                          color:
+                              i == cur ? numColorSelected : numColorUnselected,
                           fontWeight: FontWeight.bold))))));
     }
     displays.add(Padding(
@@ -1173,9 +1278,8 @@ void showOptions(
       await toolbarDisplayToggle(context, id, gFFI);
 
   List<TToggleMenu> privacyModeList = [];
-  // privacy mode
-  final privacyModeState = PrivacyModeState.find(id);
-  if (gFFI.ffiModel.keyboard && gFFI.ffiModel.pi.features.privacyMode) {
+  if ((gFFI.ffiModel.pi.features.privacyMode && gFFI.ffiModel.keyboard) ||
+      privacyModeState.isNotEmpty) {
     privacyModeList = toolbarPrivacyMode(privacyModeState, context, id, gFFI);
     if (privacyModeList.length == 1) {
       displayToggles.add(privacyModeList[0]);
@@ -1201,6 +1305,10 @@ void showOptions(
                     if (v != null) viewStyle.value = v;
                   }
                 : null)),
+      // Show custom scale controls when custom view style is selected
+      Obx(() => viewStyle.value == kRemoteViewStyleCustom
+          ? MobileCustomScaleControls(ffi: gFFI)
+          : const SizedBox.shrink()),
       const Divider(color: MyTheme.border),
       for (var e in imageQualityRadios)
         Obx(() => getRadio<String>(

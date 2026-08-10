@@ -69,6 +69,7 @@ lazy_static::lazy_static! {
     static ref ASYNC_JOB_STATUS : Arc<Mutex<String>> = Default::default();
     static ref ASYNC_HTTP_STATUS : Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     static ref TEMPORARY_PASSWD : Arc<Mutex<String>> = Arc::new(Mutex::new("".to_owned()));
+    static ref IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS : Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -77,6 +78,11 @@ lazy_static::lazy_static! {
     static ref OPTIONS : Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(Config::get_options()));
     pub static ref SENDER : Mutex<mpsc::UnboundedSender<ipc::Data>> = Mutex::new(check_connect_status(true));
     static ref CHILDREN : Children = Default::default();
+}
+
+#[cfg(target_os = "windows")]
+lazy_static::lazy_static! {
+    pub static ref IS_FILE_TRANSFER_ENABLED: Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
 }
 
 const INIT_ASYNC_JOB_STATUS: &str = " ";
@@ -204,6 +210,19 @@ pub fn use_texture_render() -> bool {
 }
 
 #[inline]
+pub fn is_option_fixed(key: &str) -> bool {
+    config::OVERWRITE_DISPLAY_SETTINGS
+        .read()
+        .unwrap()
+        .contains_key(key)
+        || config::OVERWRITE_LOCAL_SETTINGS
+            .read()
+            .unwrap()
+            .contains_key(key)
+        || config::OVERWRITE_SETTINGS.read().unwrap().contains_key(key)
+}
+
+#[inline]
 pub fn get_local_option(key: String) -> String {
     crate::get_local_option(&key)
 }
@@ -226,7 +245,20 @@ pub fn get_builtin_option(key: &str) -> String {
 
 #[inline]
 pub fn set_local_option(key: String, value: String) {
-    LocalConfig::set_option(key.clone(), value.clone());
+    LocalConfig::set_option(key.clone(), value);
+}
+
+/// Resolve relative avatar path (e.g. "/avatar/xxx") to absolute URL
+/// by prepending the API server address.
+pub fn resolve_avatar_url(avatar: String) -> String {
+    let avatar = avatar.trim().to_owned();
+    if avatar.starts_with('/') {
+        let api_server = get_api_server();
+        if !api_server.is_empty() {
+            return format!("{}{}", api_server.trim_end_matches('/'), avatar);
+        }
+    }
+    avatar
 }
 
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
@@ -452,10 +484,8 @@ pub fn install_options() -> String {
 pub fn get_socks() -> Vec<String> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let s = ipc::get_socks();
-    #[cfg(target_os = "android")]
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     let s = Config::get_socks();
-    #[cfg(target_os = "ios")]
-    let s: Option<config::Socks5Server> = None;
     match s {
         None => Vec::new(),
         Some(s) => {
@@ -477,7 +507,7 @@ pub fn set_socks(proxy: String, username: String, password: String) {
     };
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     ipc::set_socks(socks).ok();
-    #[cfg(target_os = "android")]
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     {
         let _nat = crate::CheckTestNatType::new();
         if socks.proxy.is_empty() {
@@ -485,8 +515,11 @@ pub fn set_socks(proxy: String, username: String, password: String) {
         } else {
             Config::set_socks(Some(socks));
         }
-        crate::RendezvousMediator::restart();
         log::info!("socks updated");
+    }
+    #[cfg(target_os = "android")]
+    {
+        crate::RendezvousMediator::restart();
     }
 }
 
@@ -576,19 +609,56 @@ pub fn update_temporary_password() {
 }
 
 #[inline]
-pub fn permanent_password() -> String {
+pub fn is_permanent_password_set() -> bool {
     #[cfg(any(target_os = "android", target_os = "ios"))]
-    return Config::get_permanent_password();
+    return Config::has_permanent_password();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    return ipc::get_permanent_password();
+    {
+        let daemon_is_set = ipc::is_permanent_password_set();
+        // `daemon_is_set` is authoritative for the return value. Local storage is only used to
+        // decide whether we should attempt a sync to clear stale user-side state.
+        let local_storage_is_empty = if daemon_is_set {
+            true
+        } else {
+            let (storage, _) = Config::get_local_permanent_password_storage_and_salt();
+            storage.is_empty()
+        };
+        if daemon_is_set || !local_storage_is_empty {
+            allow_err!(ipc::sync_permanent_password_storage_from_daemon());
+        }
+        daemon_is_set
+    }
 }
 
 #[inline]
-pub fn set_permanent_password(password: String) {
+pub fn is_local_permanent_password_set() -> bool {
     #[cfg(any(target_os = "android", target_os = "ios"))]
-    Config::set_permanent_password(&password);
+    return Config::has_local_permanent_password();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    allow_err!(ipc::set_permanent_password(password));
+    {
+        allow_err!(ipc::sync_permanent_password_storage_from_daemon());
+        Config::has_local_permanent_password()
+    }
+}
+
+pub fn set_permanent_password_with_result(password: String) -> bool {
+    if config::Config::is_disable_change_permanent_password() {
+        return false;
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        return config::Config::set_permanent_password(&password);
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        match crate::ipc::set_permanent_password_with_ack(password) {
+            Ok(ok) => ok,
+            Err(err) => {
+                log::warn!("Failed to set permanent password via IPC: {err}");
+                false
+            }
+        }
+    }
 }
 
 #[inline]
@@ -641,7 +711,6 @@ pub fn is_can_input_monitoring(_prompt: bool) -> bool {
 
 #[inline]
 pub fn get_error() -> String {
-    #[cfg(not(any(feature = "cli")))]
     #[cfg(target_os = "linux")]
     {
         let dtype = crate::platform::linux::get_display_server();
@@ -832,8 +901,10 @@ pub fn get_async_job_status() -> String {
 #[inline]
 pub fn get_langs() -> String {
     use serde_json::json;
+    let hide_cjk = crate::lang::cjk_ui_unavailable();
     let mut x: Vec<(&str, String)> = crate::lang::LANGS
         .iter()
+        .filter(|a| !hide_cjk || !crate::lang::is_cjk_lang(a.0))
         .map(|a| (a.0, format!("{} ({})", a.1, a.0)))
         .collect();
     x.sort_by(|a, b| a.0.cmp(b.0));
@@ -948,6 +1019,102 @@ pub fn get_api_server() -> String {
         get_option("api-server"),
         get_option("custom-rendezvous-server"),
     )
+}
+
+pub enum DeployResult {
+    Ok,
+    NotEnabled,
+    InvalidInput,
+    IdTaken(String),
+    Error(String),
+}
+
+impl DeployResult {
+    pub fn message(&self) -> String {
+        match self {
+            Self::Ok => "".to_owned(),
+            Self::NotEnabled => "The server does not require explicit deployment.".to_owned(),
+            Self::InvalidInput => "Invalid input.".to_owned(),
+            Self::IdTaken(id) => {
+                format!(
+                    "Id `{}` is already used by another machine on the server.",
+                    id
+                )
+            }
+            Self::Error(err) => err.clone(),
+        }
+    }
+}
+
+pub fn deploy_device(token: String, new_id: Option<String>) -> DeployResult {
+    if Config::no_register_device() {
+        return DeployResult::Error("Cannot deploy an unregistrable device!".to_owned());
+    }
+    let token = token.trim();
+    if token.is_empty() {
+        return DeployResult::Error("token is required!".to_owned());
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let local_id = Config::get_id();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let local_id = ipc::get_id();
+    let id_to_deploy = new_id.clone().unwrap_or_else(|| local_id.clone());
+    let uuid = crate::encode64(hbb_common::get_uuid());
+    let pk = crate::encode64(Config::get_key_pair().1);
+    let body = serde_json::json!({
+        "id": id_to_deploy,
+        "uuid": uuid,
+        "pk": pk,
+    });
+    let header = "Authorization: Bearer ".to_owned() + token;
+    let url = get_api_server() + "/api/devices/deploy";
+    let text = match crate::post_request_sync(url, body.to_string(), &header) {
+        Ok(text) => text,
+        Err(err) => return DeployResult::Error(format!("Request failed: {}", err)),
+    };
+    let parsed: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+    match parsed["result"].as_str().unwrap_or("") {
+        "OK" => {
+            if let Some(new_id) = new_id {
+                if new_id != local_id {
+                    #[cfg(any(target_os = "android", target_os = "ios"))]
+                    {
+                        Config::set_key_confirmed(false);
+                        Config::set_id(&new_id);
+                    }
+                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                    if let Err(err) = ipc::set_config("id", new_id) {
+                        return DeployResult::Error(format!(
+                            "Failed to persist deployed id locally: {}",
+                            err
+                        ));
+                    }
+                }
+            }
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            if let Err(err) = ipc::notify_deployed() {
+                log::warn!("Failed to notify deployed state: {}", err);
+            }
+            #[cfg(target_os = "android")]
+            {
+                crate::rendezvous_mediator::NEEDS_DEPLOY
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
+                crate::rendezvous_mediator::reset_needs_deploy_notification();
+                crate::rendezvous_mediator::RendezvousMediator::restart();
+            }
+            DeployResult::Ok
+        }
+        "NOT_ENABLED" => DeployResult::NotEnabled,
+        "INVALID_INPUT" => DeployResult::InvalidInput,
+        "ID_TAKEN" => DeployResult::IdTaken(id_to_deploy),
+        _ => {
+            if text.is_empty() {
+                DeployResult::Error("Unknown response.".to_owned())
+            } else {
+                DeployResult::Error(text)
+            }
+        }
+    }
 }
 
 #[inline]
@@ -1152,8 +1319,6 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
     let mut video_conn_count = 0;
     #[cfg(not(feature = "flutter"))]
     let mut id = "".to_owned();
-    #[cfg(target_os = "windows")]
-    let mut enable_file_transfer = "".to_owned();
     let is_cm = crate::common::is_cm();
 
     loop {
@@ -1178,15 +1343,6 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                             Ok(Some(ipc::Data::Options(Some(v)))) => {
                                 *OPTIONS.lock().unwrap() = v;
                                 *OPTION_SYNCED.lock().unwrap() = true;
-
-                                #[cfg(target_os = "windows")]
-                                {
-                                    let b = OPTIONS.lock().unwrap().get(OPTION_ENABLE_FILE_TRANSFER).map(|x| x.to_string()).unwrap_or_default();
-                                    if b != enable_file_transfer {
-                                        clipboard::ContextSend::enable(config::option2bool(OPTION_ENABLE_FILE_TRANSFER, &b));
-                                        enable_file_transfer = b;
-                                    }
-                                }
                             }
                             Ok(Some(ipc::Data::Config((name, Some(value))))) => {
                                 if name == "id" {
@@ -1222,6 +1378,19 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                                     video_conn_count,
                                 };
                             }
+                            Ok(Some(ipc::Data::ControlPermissionsRemoteModify(v))) => {
+                                *IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS.lock().unwrap() = v;
+                            }
+                            #[cfg(target_os = "windows")]
+                            Ok(Some(ipc::Data::FileTransferEnabledState(v))) => {
+                                if let Some(enabled) = v {
+                                    let mut lock = IS_FILE_TRANSFER_ENABLED.lock().unwrap();
+                                    if *lock != v {
+                                        clipboard::ContextSend::enable(enabled);
+                                        *lock = v;
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -1235,6 +1404,9 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                         c.send(&ipc::Data::Config(("temporary-password".to_owned(), None))).await.ok();
                         #[cfg(feature = "flutter")]
                         c.send(&ipc::Data::VideoConnCount(None)).await.ok();
+                        c.send(&ipc::Data::ControlPermissionsRemoteModify(None)).await.ok();
+                        #[cfg(target_os = "windows")]
+                        c.send(&ipc::Data::FileTransferEnabledState(None)).await.ok();
                     }
                 }
             }
@@ -1526,6 +1698,12 @@ pub fn clear_trusted_devices() {
 #[cfg(feature = "flutter")]
 pub fn max_encrypt_len() -> usize {
     hbb_common::config::ENCRYPT_MAX_LEN
+}
+
+pub fn is_remote_modify_enabled_by_control_permissions() -> Option<bool> {
+    *IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS
+        .lock()
+        .unwrap()
 }
 
 // MouseMux V2 functions - Protocol V2 is automatic, no manual toggle needed

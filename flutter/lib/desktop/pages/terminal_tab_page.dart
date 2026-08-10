@@ -4,6 +4,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
+import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
@@ -33,6 +34,10 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
   static const IconData selectedIcon = Icons.terminal;
   static const IconData unselectedIcon = Icons.terminal_outlined;
   int _nextTerminalId = 1;
+  // Lightweight idempotency guard for async close operations
+  final Set<String> _closingTabs = {};
+  // When true, all session cleanup should persist (window-level close in progress)
+  bool _windowClosing = false;
 
   _TerminalTabPageState(Map<String, dynamic> params) {
     Get.put(DesktopTabController(tabType: DesktopTabType.terminal));
@@ -41,6 +46,7 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
           .setTitle(getWindowNameWithId(id));
     };
     tabController.onRemoved = (_, id) => onRemoveId(id);
+    tabController.onCloseWindow = _closeWindowFromConnection;
     final terminalId = params['terminalId'] ?? _nextTerminalId++;
     tabController.add(_createTerminalTab(
       peerId: params['id'],
@@ -61,27 +67,20 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
     String? connToken,
   }) {
     final tabKey = '${peerId}_$terminalId';
+    final alias = bind.mainGetPeerOptionSync(id: peerId, key: 'alias');
+    final tabLabel =
+        alias.isNotEmpty ? '$alias #$terminalId' : '$peerId #$terminalId';
     return TabInfo(
       key: tabKey,
-      label: '$peerId #$terminalId',
+      label: tabLabel,
       selectedIcon: selectedIcon,
       unselectedIcon: unselectedIcon,
-      onTabCloseButton: () async {
-        // Close the terminal session first
-        final ffi = TerminalConnectionManager.getExistingConnection(peerId);
-        if (ffi != null) {
-          final terminalModel = ffi.terminalModels[terminalId];
-          if (terminalModel != null) {
-            await terminalModel.closeTerminal();
-          }
-        }
-        // Then close the tab
-        tabController.closeBy(tabKey);
-      },
+      onTabCloseButton: () => _closeTab(tabKey),
       page: TerminalPage(
         key: ValueKey(tabKey),
         id: peerId,
         terminalId: terminalId,
+        tabKey: tabKey,
         password: password,
         isSharedPassword: isSharedPassword,
         tabController: tabController,
@@ -89,6 +88,161 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
         connToken: connToken,
       ),
     );
+  }
+
+  /// Unified tab close handler for all close paths (button, shortcut, programmatic).
+  /// Shows audit dialog, cleans up session if not persistent, then removes the UI tab.
+  Future<void> _closeTab(String tabKey) async {
+    // Idempotency guard: skip if already closing this tab
+    if (_closingTabs.contains(tabKey)) return;
+    _closingTabs.add(tabKey);
+
+    try {
+      // Snapshot peerTabCount BEFORE any await to avoid race with concurrent
+      // _closeAllTabs clearing tabController (which would make the live count
+      // drop to 0 and incorrectly trigger session persistence).
+      // Note: the snapshot may become stale if other individual tabs are closed
+      // during the audit dialog, but this is an acceptable trade-off.
+      int? snapshotPeerTabCount;
+      final parsed = _parseTabKey(tabKey);
+      if (parsed != null) {
+        final (peerId, _) = parsed;
+        snapshotPeerTabCount = tabController.state.value.tabs.where((t) {
+          final p = _parseTabKey(t.key);
+          return p != null && p.$1 == peerId;
+        }).length;
+      }
+
+      if (await desktopTryShowTabAuditDialogCloseCancelled(
+        id: tabKey,
+        tabController: tabController,
+      )) {
+        return;
+      }
+
+      // Close terminal session if not in persistent mode.
+      // Wrapped separately so session cleanup failure never blocks UI tab removal.
+      try {
+        await _closeTerminalSessionIfNeeded(tabKey,
+            peerTabCount: snapshotPeerTabCount);
+      } catch (e) {
+        debugPrint('[TerminalTabPage] Session cleanup failed for $tabKey: $e');
+      }
+      // Always close the tab from UI, regardless of session cleanup result
+      tabController.closeBy(tabKey);
+    } catch (e) {
+      debugPrint('[TerminalTabPage] Error closing tab $tabKey: $e');
+    } finally {
+      _closingTabs.remove(tabKey);
+    }
+  }
+
+  /// Close all tabs with session cleanup.
+  /// Used for window-level close operations (onDestroy, handleWindowCloseButton).
+  /// UI tabs are removed immediately; session cleanup runs in parallel with a
+  /// bounded timeout so window close is not blocked indefinitely.
+  Future<void> _closeAllTabs() async {
+    _windowClosing = true;
+    final tabKeys = tabController.state.value.tabs.map((t) => t.key).toList();
+    // Remove all UI tabs immediately (same instant behavior as the old tabController.clear())
+    // Keep the cleanup target lookup below synchronous before its first await:
+    // it relies on the current frame still retaining each TerminalPage's FFI/model.
+    tabController.clear();
+    // Run session cleanup in parallel with bounded timeout (closeTerminal() has internal 3s timeout).
+    // Skip tabs already being closed by a concurrent _closeTab() to avoid duplicate FFI calls.
+    final futures = tabKeys
+        .where((tabKey) => !_closingTabs.contains(tabKey))
+        .map((tabKey) async {
+      try {
+        await _closeTerminalSessionIfNeeded(tabKey, persistAll: true);
+      } catch (e) {
+        debugPrint('[TerminalTabPage] Session cleanup failed for $tabKey: $e');
+      }
+    }).toList();
+    if (futures.isNotEmpty) {
+      await Future.wait(futures).timeout(
+        const Duration(seconds: 4),
+        onTimeout: () {
+          debugPrint(
+              '[TerminalTabPage] Session cleanup timed out for batch close');
+          return [];
+        },
+      );
+    }
+  }
+
+  /// Close the terminal session on server side based on persistent mode.
+  ///
+  /// [persistAll] controls behavior when persistent mode is enabled:
+  /// - `true` (window close): persist all sessions, don't close any.
+  /// - `false` (tab close): only persist the last session for the peer,
+  ///   close others so only the most recent disconnected session survives.
+  ///
+  /// Note: if [_windowClosing] is true, persistAll is forced to true so that
+  /// in-flight _closeTab() calls don't accidentally close sessions that the
+  /// window-close flow intends to preserve.
+  Future<void> _closeTerminalSessionIfNeeded(String tabKey,
+      {bool persistAll = false, int? peerTabCount}) async {
+    // If window close is in progress, override to persist all sessions
+    // even if this call originated from an individual tab close.
+    if (_windowClosing) {
+      persistAll = true;
+    }
+    final parsed = _parseTabKey(tabKey);
+    if (parsed == null) return;
+    final (peerId, terminalId) = parsed;
+
+    final ffi = TerminalConnectionManager.getExistingConnection(peerId);
+    if (ffi == null) return;
+
+    final isPersistent = bind.sessionGetToggleOptionSync(
+      sessionId: ffi.sessionId,
+      arg: kOptionTerminalPersistent,
+    );
+
+    if (isPersistent) {
+      if (persistAll) {
+        // Window close: persist all sessions
+        return;
+      }
+      // Tab close: only persist if this is the last tab for this peer.
+      // Use the snapshot value if provided (avoids race with concurrent tab removal).
+      final effectivePeerTabCount = peerTabCount ??
+          tabController.state.value.tabs.where((t) {
+            final p = _parseTabKey(t.key);
+            return p != null && p.$1 == peerId;
+          }).length;
+      if (effectivePeerTabCount <= 1) {
+        // Last tab for this peer — persist the session
+        return;
+      }
+      // Not the last tab — fall through to close the session
+    }
+
+    final terminalModel = ffi.terminalModels[terminalId];
+    if (terminalModel != null) {
+      // closeTerminal() has internal 3s timeout, no need for external timeout
+      await terminalModel.closeTerminal();
+    }
+  }
+
+  /// Parse tabKey (format: "peerId_terminalId") into its components.
+  /// Note: peerId may contain underscores, so we use lastIndexOf('_').
+  /// Returns null if tabKey format is invalid.
+  (String peerId, int terminalId)? _parseTabKey(String tabKey) {
+    final lastUnderscore = tabKey.lastIndexOf('_');
+    if (lastUnderscore <= 0) {
+      debugPrint('[TerminalTabPage] Invalid tabKey format: $tabKey');
+      return null;
+    }
+    final terminalIdStr = tabKey.substring(lastUnderscore + 1);
+    final terminalId = int.tryParse(terminalIdStr);
+    if (terminalId == null) {
+      debugPrint('[TerminalTabPage] Invalid terminalId in tabKey: $tabKey');
+      return null;
+    }
+    final peerId = tabKey.substring(0, lastUnderscore);
+    return (peerId, terminalId);
   }
 
   Widget _tabMenuBuilder(String peerId, CancelFunc cancelFunc) {
@@ -174,7 +328,8 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
       } else if (call.method == kWindowEventRestoreTerminalSessions) {
         _restoreSessions(call.arguments);
       } else if (call.method == "onDestroy") {
-        tabController.clear();
+        // Clean up sessions before window destruction (bounded wait)
+        await _closeAllTabs();
       } else if (call.method == kWindowActionRebuild) {
         reloadCurrentWindow();
       } else if (call.method == kWindowEventActiveSession) {
@@ -184,7 +339,10 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
         final currentTab = tabController.state.value.selectedTabInfo;
         assert(call.arguments is String,
             "Expected String arguments for kWindowEventActiveSession, got ${call.arguments.runtimeType}");
-        if (currentTab.key.startsWith(call.arguments)) {
+        // Use lastIndexOf to handle peerIds containing underscores
+        final lastUnderscore = currentTab.key.lastIndexOf('_');
+        if (lastUnderscore > 0 &&
+            currentTab.key.substring(0, lastUnderscore) == call.arguments) {
           windowOnTop(windowId());
           return true;
         }
@@ -213,8 +371,34 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
     final persistentSessions =
         args['persistent_sessions'] as List<dynamic>? ?? [];
     final sortedSessions = persistentSessions.whereType<int>().toList()..sort();
+    var peerId = args['peer_id'] as String? ?? '';
+    if (peerId.isEmpty) {
+      if (tabController.state.value.tabs.isEmpty ||
+          tabController.state.value.selected >=
+              tabController.state.value.tabs.length) {
+        debugPrint('[TerminalTabPage] Skip restore: no selected tab');
+        return;
+      }
+      final currentTab = tabController.state.value.selectedTabInfo;
+      final parsed = _parseTabKey(currentTab.key);
+      if (parsed == null) return;
+      peerId = parsed.$1;
+    }
+    final existingTerminalIds = tabController.state.value.tabs
+        .map((tab) => _parseTabKey(tab.key))
+        .where((parsed) => parsed != null && parsed.$1 == peerId)
+        .map((parsed) => parsed!.$2)
+        .toSet();
+    if (existingTerminalIds.isEmpty) {
+      debugPrint(
+          '[TerminalTabPage] Skip restore: no seed tab for peer $peerId');
+      return;
+    }
     for (final terminalId in sortedSessions) {
-      _addNewTerminalForCurrentPeer(terminalId: terminalId);
+      if (!existingTerminalIds.add(terminalId)) {
+        continue;
+      }
+      _addNewTerminal(peerId, terminalId: terminalId);
       // A delay is required to ensure the UI has sufficient time to update
       // before adding the next terminal. Without this delay, `_TerminalPageState::dispose()`
       // may be called prematurely while the tab widget is still in the tab controller.
@@ -255,7 +439,7 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
           // macOS: Cmd+W (standard for close tab)
           final currentTab = tabController.state.value.selectedTabInfo;
           if (tabController.state.value.tabs.length > 1) {
-            tabController.closeBy(currentTab.key);
+            _closeTab(currentTab.key);
             return true;
           }
         } else if (!isMacOS &&
@@ -264,7 +448,7 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
           // Other platforms: Ctrl+Shift+W (to avoid conflict with Ctrl+W word delete)
           final currentTab = tabController.state.value.selectedTabInfo;
           if (tabController.state.value.tabs.length > 1) {
-            tabController.closeBy(currentTab.key);
+            _closeTab(currentTab.key);
             return true;
           }
         }
@@ -319,7 +503,10 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
   void _addNewTerminal(String peerId, {int? terminalId}) {
     // Find first tab for this peer to get connection parameters
     final firstTab = tabController.state.value.tabs.firstWhere(
-      (tab) => tab.key.startsWith('$peerId\_'),
+      (tab) {
+        final last = tab.key.lastIndexOf('_');
+        return last > 0 && tab.key.substring(0, last) == peerId;
+      },
     );
     if (firstTab.page is TerminalPage) {
       final page = firstTab.page as TerminalPage;
@@ -340,11 +527,10 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
 
   void _addNewTerminalForCurrentPeer({int? terminalId}) {
     final currentTab = tabController.state.value.selectedTabInfo;
-    final parts = currentTab.key.split('_');
-    if (parts.isNotEmpty) {
-      final peerId = parts[0];
-      _addNewTerminal(peerId, terminalId: terminalId);
-    }
+    final parsed = _parseTabKey(currentTab.key);
+    if (parsed == null) return;
+    final (peerId, _) = parsed;
+    _addNewTerminal(peerId, terminalId: terminalId);
   }
 
   @override
@@ -358,10 +544,9 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
           selectedBorderColor: MyTheme.accent,
           labelGetter: DesktopTab.tablabelGetter,
           tabMenuBuilder: (key) {
-            // Extract peerId from tab key (format: "peerId_terminalId")
-            final parts = key.split('_');
-            if (parts.isEmpty) return Container();
-            final peerId = parts[0];
+            final parsed = _parseTabKey(key);
+            if (parsed == null) return Container();
+            final (peerId, _) = parsed;
             return _tabMenuBuilder(peerId, () {});
           },
         ));
@@ -390,6 +575,11 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
     }
   }
 
+  Future<void> _closeWindowFromConnection() async {
+    await _closeAllTabs();
+    await WindowController.fromWindowId(windowId()).close();
+  }
+
   int windowId() {
     return widget.params["windowId"];
   }
@@ -407,8 +597,16 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
 
   Future<bool> handleWindowCloseButton() async {
     final connLength = tabController.state.value.tabs.length;
+    if (connLength == 1) {
+      if (await desktopTryShowTabAuditDialogCloseCancelled(
+        id: tabController.state.value.tabs[0].key,
+        tabController: tabController,
+      )) {
+        return false;
+      }
+    }
     if (connLength <= 1) {
-      tabController.clear();
+      await _closeAllTabs();
       return true;
     } else {
       final bool res;
@@ -419,7 +617,7 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
         res = await closeConfirmDialog();
       }
       if (res) {
-        tabController.clear();
+        await _closeAllTabs();
       }
       return res;
     }

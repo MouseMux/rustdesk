@@ -1,6 +1,6 @@
 [package]
 name = "rustdesk"
-version = "1.4.3-mousemux-v2.5"
+version = "1.4.9-mousemux-v3.0"
 authors = ["rustdesk <info@rustdesk.com>", "MouseMux Edition"]
 edition = "2021"
 build= "build.rs"
@@ -22,7 +22,6 @@ path = "src/service.rs"
 
 [features]
 inline = []
-cli = []
 use_samplerate = ["samplerate"]
 use_rubato = ["rubato"]
 use_dasp = ["dasp"]
@@ -66,8 +65,6 @@ dasp = { version = "0.11", features = ["signal", "interpolate-linear", "interpol
 rubato = { version = "0.12", optional = true }
 samplerate = { version = "0.2", optional = true }
 uuid = { version = "1.3", features = ["v4"] }
-clap = "4.2"
-rpassword = "7.2"
 num_cpus = "1.15"
 bytes = { version = "1.4", features = ["serde"] }
 default-net = "0.14"
@@ -80,13 +77,14 @@ crossbeam-queue = "0.3"
 hex = "0.4"
 chrono = "0.4"
 cidr-utils = "0.5"
-libloading = "0.8"
 fon = "0.6"
 zip = "0.6"
 shutdown_hooks = "0.1"
 totp-rs = { version = "5.4", default-features = false, features = ["gen_secret", "otpauth"] }
 stunclient = "0.4"
 kcp-sys= { git = "https://github.com/rustdesk-org/kcp-sys"}
+reqwest = { version = "0.12", features = ["blocking", "socks", "json", "native-tls", "rustls-tls", "rustls-tls-native-roots", "gzip"], default-features=false }
+
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 # https://github.com/rustdesk/rustdesk/discussions/10197, not use cpal on linux
 cpal = { git = "https://github.com/rustdesk-org/cpal", branch = "osx-screencapturekit" }
@@ -125,10 +123,19 @@ winapi = { version = "0.3", features = [
 ] }
 windows = { version = "0.61", features = [
     "Win32",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
     "Win32_System",
     "Win32_System_Diagnostics",
-    "Win32_System_Threading",
     "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Environment",
+    "Win32_System_IO",
+    "Win32_System_Memory",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
 ] }
 winreg = "0.11"
 windows-service = "0.6"
@@ -150,7 +157,7 @@ fruitbasket = "0.10"
 objc_id = "0.1"
 
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-tray-icon = { git = "https://github.com/tauri-apps/tray-icon" }
+tray-icon = { git = "https://github.com/tauri-apps/tray-icon", version = "0.21.3" }
 tao = { git = "https://github.com/rustdesk-org/tao", branch = "dev" }
 image = "0.24"
 
@@ -165,14 +172,8 @@ fontdb = "0.23"
 bytemuck = "1.23"
 ttf-parser = "0.25"
 
-[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
-# https://github.com/rustdesk/rustdesk-server-pro/issues/189, using native-tls for better tls support
-reqwest = { git = "https://github.com/rustdesk-org/reqwest", features = ["blocking", "socks", "json", "native-tls", "gzip"], default-features=false }
-
-[target.'cfg(not(any(target_os = "macos", target_os = "windows")))'.dependencies]
-reqwest = { git = "https://github.com/rustdesk-org/reqwest", features = ["blocking", "socks", "json", "rustls-tls", "rustls-tls-native-roots", "gzip"], default-features=false }
-
 [target.'cfg(target_os = "linux")'.dependencies]
+libxdo-sys = "0.11"
 psimple = { package = "libpulse-simple-binding", version = "2.27" }
 pulse = { package = "libpulse-binding", version = "2.27" }
 rust-pulsectl = { git = "https://github.com/rustdesk-org/pulsectl" }
@@ -181,7 +182,6 @@ evdev = { git="https://github.com/rustdesk-org/evdev" }
 dbus = "0.9"
 dbus-crossroads = "0.5"
 pam = { git="https://github.com/rustdesk-org/pam" }
-users = { version = "0.11" }
 x11-clipboard = {git="https://github.com/clslaid/x11-clipboard", branch = "feat/store-batch", optional = true}
 x11rb =  {version = "0.12", features = ["all-extensions"], optional = true}
 percent-encoding = {version = "2.3", optional = true}
@@ -190,6 +190,9 @@ nix = { version = "0.29", features = ["term", "process"]}
 gtk = "0.18"
 termios = "0.3"
 terminfo = "0.8"
+
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13"
@@ -200,8 +203,13 @@ android-wakelock = { git = "https://github.com/rustdesk-org/android-wakelock" }
 members = ["libs/scrap", "libs/hbb_common", "libs/enigo", "libs/clipboard", "libs/virtual_display", "libs/virtual_display/dylib", "libs/portable", "libs/remote_printer"]
 exclude = ["vdi/host", "examples/custom_plugin"]
 
+# Patch libxdo-sys to use a stub implementation that doesn't require libxdo
+# This allows building and running on systems without libxdo installed (e.g., Wayland-only)
+[patch.crates-io]
+libxdo-sys = { path = "libs/libxdo-sys-stub" }
+
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2025 Purslane Ltd. All rights reserved. MouseMux Edition."
+LegalCopyright = "Copyright © 2026 Purslane Tech Pte. Ltd. All rights reserved. MouseMux Edition."
 ProductName = "RustDesk MouseMux Edition"
 FileDescription = "RustDesk MouseMux Edition - Multi-user Remote Desktop"
 OriginalFilename = "rustdesk.exe"
@@ -234,3 +242,6 @@ panic = 'abort'
 strip = true
 #opt-level = 'z' # only have smaller size after strip
 rpath = true
+
+[profile.dev]
+debug = 1

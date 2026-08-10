@@ -62,7 +62,13 @@ class MainActivity : FlutterActivity() {
             channelTag
         )
         initFlutterChannel(flutterMethodChannel!!)
-        thread { setCodecInfo() }
+        thread {
+            try {
+                setCodecInfo()
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to setCodecInfo: ${e.message}", e)
+            }
+        }
     }
 
     override fun onResume() {
@@ -194,12 +200,13 @@ class MainActivity : FlutterActivity() {
                 "stop_input" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                         InputService.ctx?.disableSelf()
+                    } else {
+                        InputService.ctx = null
+                        Companion.flutterMethodChannel?.invokeMethod(
+                            "on_state_changed",
+                            mapOf("name" to "input", "value" to InputService.isOpen.toString())
+                        )
                     }
-                    InputService.ctx = null
-                    Companion.flutterMethodChannel?.invokeMethod(
-                        "on_state_changed",
-                        mapOf("name" to "input", "value" to InputService.isOpen.toString())
-                    )
                     result.success(true)
                 }
                 "cancel_notification" -> {

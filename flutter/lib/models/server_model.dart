@@ -8,7 +8,6 @@ import 'package:flutter_hbb/mobile/pages/settings_page.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../common.dart';
@@ -50,6 +49,8 @@ class ServerModel with ChangeNotifier {
   final List<Client> _clients = [];
 
   Timer? cmHiddenTimer;
+
+  final _wakelockKey = UniqueKey();
 
   bool get isStart => _isStart;
 
@@ -297,7 +298,7 @@ class ServerModel with ChangeNotifier {
   }
 
   toggleAudio() async {
-    if (clients.isNotEmpty) {
+    if (clients.any((c) => !c.disconnected)) {
       await showClientsMayNotBeChangedAlert(parent.target);
     }
     if (!_audioOk && !await AndroidPermissionManager.check(kRecordAudio)) {
@@ -315,7 +316,7 @@ class ServerModel with ChangeNotifier {
   }
 
   toggleFile() async {
-    if (clients.isNotEmpty) {
+    if (clients.any((c) => !c.disconnected)) {
       await showClientsMayNotBeChangedAlert(parent.target);
     }
     if (!_fileOk &&
@@ -344,7 +345,7 @@ class ServerModel with ChangeNotifier {
   }
 
   toggleInput() async {
-    if (clients.isNotEmpty) {
+    if (clients.any((c) => !c.disconnected)) {
       await showClientsMayNotBeChangedAlert(parent.target);
     }
     if (_inputOk) {
@@ -466,21 +467,8 @@ class ServerModel with ChangeNotifier {
     await parent.target?.invokeMethod("stop_service");
     await bind.mainStopService();
     notifyListeners();
-    if (!isLinux) {
-      // current linux is not supported
-      WakelockPlus.disable();
-    }
-  }
-
-  Future<bool> setPermanentPassword(String newPW) async {
-    await bind.mainSetPermanentPassword(password: newPW);
-    await Future.delayed(Duration(milliseconds: 500));
-    final pw = await bind.mainGetPermanentPassword();
-    if (newPW == pw) {
-      return true;
-    } else {
-      return false;
-    }
+    // for androidUpdatekeepScreenOn only
+    WakelockManager.disable(_wakelockKey);
   }
 
   fetchID() async {
@@ -561,10 +549,19 @@ class ServerModel with ChangeNotifier {
         if (index < 0) {
           _clients.add(client);
         } else {
+          if (_clients[index].authorized) {
+            _clients[index].privacyMode = client.privacyMode;
+            notifyListeners();
+            return;
+          }
           _clients[index].authorized = true;
+          _clients[index].privacyMode = client.privacyMode;
         }
       } else {
-        if (_clients.any((c) => c.id == client.id)) {
+        final index = _clients.indexWhere((c) => c.id == client.id);
+        if (index >= 0) {
+          _clients[index].privacyMode = client.privacyMode;
+          notifyListeners();
           return;
         }
         _clients.add(client);
@@ -613,12 +610,12 @@ class ServerModel with ChangeNotifier {
   void showLoginDialog(Client client) {
     showClientDialog(
       client,
-      client.isFileTransfer 
-          ? "Transfer file" 
+      client.isFileTransfer
+          ? "Transfer file"
           : client.isViewCamera
               ? "View camera"
-              : client.isTerminal 
-                  ? "Terminal" 
+              : client.isTerminal
+                  ? "Terminal"
                   : "Share screen",
       'Do you accept?',
       'android_new_connection_tip',
@@ -797,12 +794,10 @@ class ServerModel with ChangeNotifier {
     final on = ((keepScreenOn == KeepScreenOn.serviceOn) && _isStart) ||
         (keepScreenOn == KeepScreenOn.duringControlled &&
             _clients.map((e) => !e.disconnected).isNotEmpty);
-    if (on != await WakelockPlus.enabled) {
-      if (on) {
-        WakelockPlus.enable();
-      } else {
-        WakelockPlus.disable();
-      }
+    if (on) {
+      WakelockManager.enable(_wakelockKey, isServer: true);
+    } else {
+      WakelockManager.disable(_wakelockKey);
     }
   }
 }
@@ -823,6 +818,7 @@ class Client {
   bool isTerminal = false;
   String portForward = "";
   String name = "";
+  String avatar = "";
   String peerId = ""; // peer user's id,show at app
   bool keyboard = false;
   bool clipboard = false;
@@ -831,6 +827,7 @@ class Client {
   bool restart = false;
   bool recording = false;
   bool blockInput = false;
+  bool privacyMode = false;
   bool disconnected = false;
   bool fromSwitch = false;
   bool inVoiceCall = false;
@@ -850,6 +847,7 @@ class Client {
     isTerminal = json['is_terminal'] ?? false;
     portForward = json['port_forward'];
     name = json['name'];
+    avatar = json['avatar'] ?? '';
     peerId = json['peer_id'];
     keyboard = json['keyboard'];
     clipboard = json['clipboard'];
@@ -858,6 +856,7 @@ class Client {
     restart = json['restart'];
     recording = json['recording'];
     blockInput = json['block_input'];
+    privacyMode = json['privacy_mode'] ?? privacyMode;
     disconnected = json['disconnected'];
     fromSwitch = json['from_switch'];
     inVoiceCall = json['in_voice_call'];
@@ -873,6 +872,7 @@ class Client {
     data['is_terminal'] = isTerminal;
     data['port_forward'] = portForward;
     data['name'] = name;
+    data['avatar'] = avatar;
     data['peer_id'] = peerId;
     data['keyboard'] = keyboard;
     data['clipboard'] = clipboard;
@@ -881,6 +881,7 @@ class Client {
     data['restart'] = restart;
     data['recording'] = recording;
     data['block_input'] = blockInput;
+    data['privacy_mode'] = privacyMode;
     data['disconnected'] = disconnected;
     data['from_switch'] = fromSwitch;
     data['in_voice_call'] = inVoiceCall;

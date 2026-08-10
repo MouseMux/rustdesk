@@ -247,7 +247,7 @@ impl KeyboardControllable for Enigo {
             // Windows uses uft-16 encoding. We need to check
             // for variable length characters. As such some
             // characters can be 32 bit long and those are
-            // encoded in such called hight and low surrogates
+            // encoded in so-called high and low surrogates
             // each 16 bit wide that needs to be send after
             // another to the SendInput function without
             // being interrupted by "keyup"
@@ -298,7 +298,7 @@ impl KeyboardControllable for Enigo {
                     for pos in 0..mod_len {
                         let rpos = mod_len - 1 - pos;
                         if flag & (0x0001 << rpos) != 0 {
-                            self.key_up(modifiers[pos]);
+                            self.key_up(modifiers[rpos]);
                         }
                     }
 
@@ -328,10 +328,25 @@ impl KeyboardControllable for Enigo {
     }
 
     fn key_up(&mut self, key: Key) {
+        // Upstream 1.4.9 added Key::Layout handling here. Merged with MouseMux:
+        // every keybd_event must still carry extra_info (the per-connection HWID),
+        // otherwise MouseMux cannot tell which user the keystroke belongs to.
         let extra_info = self.get_keyboard_extra_info();
-        let code = self.key_to_keycode(key);
-        log::info!("MouseMux v2.2 protocol: key_up() - key={:?}, code={}, extra_info={} (0x{:X})", key, code, extra_info, extra_info);
-        keybd_event(KEYEVENTF_KEYUP, code, 0, extra_info);
+        match key {
+            Key::Layout(c) => {
+                let code = self.get_layoutdependent_keycode(c);
+                if code as u16 != 0xFFFF {
+                    let vk = code & 0x00FF;
+                    crate::mm_debug!("MouseMux: key_up() layout key={:?}, vk={}, extra_info=0x{:X}", key, vk, extra_info);
+                    keybd_event(KEYEVENTF_KEYUP, vk, 0, extra_info);
+                }
+            }
+            _ => {
+                let code = self.key_to_keycode(key);
+                crate::mm_debug!("MouseMux: key_up() key={:?}, code={}, extra_info=0x{:X}", key, code, extra_info);
+                keybd_event(KEYEVENTF_KEYUP, code, 0, extra_info);
+            }
+        }
     }
 
     fn get_key_state(&mut self, key: Key) -> bool {

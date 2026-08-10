@@ -15,6 +15,8 @@ use rdev::{self, EventType, Key as RdevKey, KeyCode, RawKey};
 use rdev::{CGEventSourceStateID, CGEventTapLocation, VirtualInput};
 #[cfg(target_os = "linux")]
 use scrap::wayland::pipewire::RDP_SESSION_INFO;
+#[cfg(target_os = "linux")]
+use std::sync::mpsc;
 use std::{
     convert::TryFrom,
     ops::{Deref, DerefMut},
@@ -22,6 +24,7 @@ use std::{
     thread,
     time::{self, Duration, Instant},
 };
+
 #[cfg(windows)]
 use winapi::um::winuser::WHEEL_DELTA;
 
@@ -105,6 +108,10 @@ struct Input {
 }
 
 const KEY_CHAR_START: u64 = 9999;
+
+// XKB keycode for Insert key (evdev KEY_INSERT code 110 + 8 for XKB offset)
+#[cfg(target_os = "linux")]
+const XKB_KEY_INSERT: u16 = evdev::Key::KEY_INSERT.code() + 8;
 
 #[derive(Clone, Default)]
 pub struct MouseCursorSub {
@@ -442,7 +449,42 @@ lazy_static::lazy_static! {
     static ref KEYS_DOWN: Arc<Mutex<HashMap<KeysDown, Instant>>> = Default::default();
     static ref LATEST_PEER_INPUT_CURSOR: Arc<Mutex<Input>> = Default::default();
     static ref LATEST_SYS_CURSOR_POS: Arc<Mutex<(Option<Instant>, (i32, i32))>> = Arc::new(Mutex::new((None, (INVALID_CURSOR_POS, INVALID_CURSOR_POS))));
+    // Track connections that are currently using relative mouse movement.
+    // Used to disable whiteboard/cursor display for all events while in relative mode.
+    static ref RELATIVE_MOUSE_CONNS: Arc<Mutex<std::collections::HashSet<i32>>> = Default::default();
 }
+
+#[cfg(target_os = "linux")]
+lazy_static::lazy_static! {
+    static ref WAYLAND_CLIPBOARD_INPUT_RECORDS: Arc<Mutex<Vec<(Instant, String)>>> =
+        Default::default();
+}
+
+#[inline]
+fn set_relative_mouse_active(conn: i32, active: bool) {
+    let mut lock = RELATIVE_MOUSE_CONNS.lock().unwrap();
+    if active {
+        lock.insert(conn);
+    } else {
+        lock.remove(&conn);
+    }
+}
+
+#[inline]
+fn is_relative_mouse_active(conn: i32) -> bool {
+    RELATIVE_MOUSE_CONNS.lock().unwrap().contains(&conn)
+}
+
+/// Clears the relative mouse mode state for a connection.
+///
+/// This must be called when an authenticated connection is dropped (during connection teardown)
+/// to avoid leaking the connection id in `RELATIVE_MOUSE_CONNS` (a `Mutex<HashSet<i32>>`).
+/// Callers are responsible for invoking this on disconnect.
+#[inline]
+pub(crate) fn clear_relative_mouse_active(conn: i32) {
+    set_relative_mouse_active(conn, false);
+}
+
 static EXITING: AtomicBool = AtomicBool::new(false);
 
 // MouseMux V2.2: serializes a whole input event across connections.
@@ -704,8 +746,8 @@ async fn set_uinput_resolution(minx: i32, maxx: i32, miny: i32, maxy: i32) -> Re
 
 pub fn is_left_up(evt: &MouseEvent) -> bool {
     let buttons = evt.mask >> 3;
-    let evt_type = evt.mask & 0x7;
-    return buttons == 1 && evt_type == 2;
+    let evt_type = evt.mask & MOUSE_TYPE_MASK;
+    buttons == MOUSE_BUTTON_LEFT && evt_type == MOUSE_TYPE_UP
 }
 
 #[cfg(windows)]
@@ -828,7 +870,7 @@ fn record_key_is_control_key(record_key: u64) -> bool {
 
 #[inline]
 fn record_key_is_chr(record_key: u64) -> bool {
-    record_key < KEY_CHAR_START
+    record_key >= KEY_CHAR_START
 }
 
 #[inline]
@@ -1056,7 +1098,32 @@ pub fn handle_pointer_(evt: &PointerDeviceEvent, conn: i32) {
     }
 }
 
-pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
+pub fn handle_mouse_(
+    evt: &MouseEvent,
+    conn: i32,
+    _username: String,
+    _argb: u32,
+    simulate: bool,
+    _show_cursor: bool,
+) {
+    if simulate {
+        handle_mouse_simulation_(evt, conn);
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let evt_type = evt.mask & MOUSE_TYPE_MASK;
+        // Relative (delta) mouse events do not include absolute coordinates, so
+        // whiteboard/cursor rendering must be disabled during relative mode to prevent
+        // incorrect cursor/whiteboard updates. We check both is_relative_mouse_active(conn)
+        // (connection already in relative mode from prior events) and evt_type (current
+        // event is relative) to guard against the first relative event before the flag is set.
+        if _show_cursor && !is_relative_mouse_active(conn) && evt_type != MOUSE_TYPE_MOVE_RELATIVE {
+            handle_mouse_show_cursor_(evt, conn, _username, _argb);
+        }
+    }
+}
+
+pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
     if !active_mouse_(conn) {
         return;
     }
@@ -1068,11 +1135,14 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     #[cfg(windows)]
     crate::platform::windows::try_change_desktop();
     let buttons = evt.mask >> 3;
-    let evt_type = evt.mask & 0x7;
+    let evt_type = evt.mask & MOUSE_TYPE_MASK;
 
     // Held for the whole event - see INPUT_SERIALIZE. A mouse event must not be able
     // to repoint ENIGO's current_conn_id while another connection's key event is
     // mid-flight. Taken before ENIGO, matching handle_key_with_conn's lock order.
+    // Upstream 1.4.9 split handle_mouse_ into a wrapper plus this simulation
+    // function; the guard belongs here, where input is actually injected, not in
+    // the wrapper (which also does whiteboard rendering and touches no ENIGO state).
     #[cfg(windows)]
     let _input_guard = INPUT_SERIALIZE.lock().unwrap();
 
@@ -1110,6 +1180,8 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     }
     match evt_type {
         MOUSE_TYPE_MOVE => {
+            // Switching back to absolute movement implicitly disables relative mouse mode.
+            set_relative_mouse_active(conn, false);
             en.mouse_move_to(evt.x, evt.y);
             *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
                 conn,
@@ -1117,6 +1189,32 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
                 x: evt.x,
                 y: evt.y,
             };
+        }
+        // MOUSE_TYPE_MOVE_RELATIVE: Relative mouse movement for gaming/3D applications.
+        // Each client independently decides whether to use relative mode.
+        // Multiple clients can mix absolute and relative movements without conflict,
+        // as the server simply applies the delta to the current cursor position.
+        MOUSE_TYPE_MOVE_RELATIVE => {
+            set_relative_mouse_active(conn, true);
+            // Clamp delta to prevent extreme/malicious values from reaching OS APIs.
+            // This matches the Flutter client's kMaxRelativeMouseDelta constant.
+            const MAX_RELATIVE_MOUSE_DELTA: i32 = 10000;
+            let dx = evt
+                .x
+                .clamp(-MAX_RELATIVE_MOUSE_DELTA, MAX_RELATIVE_MOUSE_DELTA);
+            let dy = evt
+                .y
+                .clamp(-MAX_RELATIVE_MOUSE_DELTA, MAX_RELATIVE_MOUSE_DELTA);
+            en.mouse_move_relative(dx, dy);
+            // Get actual cursor position after relative movement for tracking
+            if let Some((x, y)) = crate::get_cursor_pos() {
+                *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
+                    conn,
+                    time: get_time(),
+                    x,
+                    y,
+                };
+            }
         }
         MOUSE_TYPE_DOWN => match buttons {
             MOUSE_BUTTON_LEFT => {
@@ -1210,6 +1308,52 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     #[cfg(not(target_os = "macos"))]
     for key in to_release {
         en.key_up(key.clone());
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn handle_mouse_show_cursor_(evt: &MouseEvent, conn: i32, username: String, argb: u32) {
+    let buttons = evt.mask >> 3;
+    let evt_type = evt.mask & MOUSE_TYPE_MASK;
+    match evt_type {
+        MOUSE_TYPE_MOVE => {
+            whiteboard::update_whiteboard(
+                whiteboard::get_key_cursor(conn),
+                whiteboard::CustomEvent::Cursor(whiteboard::Cursor {
+                    x: evt.x as _,
+                    y: evt.y as _,
+                    argb,
+                    btns: 0,
+                    text: username,
+                }),
+            );
+        }
+        MOUSE_TYPE_UP => {
+            if buttons == MOUSE_BUTTON_LEFT {
+                // Some clients intentionally send button events without coordinates.
+                // Fall back to the last known cursor position to avoid jumping to (0, 0).
+                // TODO(protocol): (0, 0) is a valid screen coordinate. Consider using a dedicated
+                // sentinel value (e.g. INVALID_CURSOR_POS) or a protocol-level flag to distinguish
+                // "coordinates not provided" from "coordinates are (0, 0)". Impact is minor since
+                // this only affects whiteboard rendering and clicking exactly at (0, 0) is rare.
+                let (x, y) = if evt.x == 0 && evt.y == 0 {
+                    get_last_input_cursor_pos()
+                } else {
+                    (evt.x, evt.y)
+                };
+                whiteboard::update_whiteboard(
+                    whiteboard::get_key_cursor(conn),
+                    whiteboard::CustomEvent::Cursor(whiteboard::Cursor {
+                        x: x as _,
+                        y: y as _,
+                        argb,
+                        btns: buttons,
+                        text: username,
+                    }),
+                );
+            }
+        }
+        _ => {}
     }
 }
 
@@ -1420,18 +1564,24 @@ fn map_keyboard_mode(evt: &KeyEvent) {
     // Wayland
     #[cfg(target_os = "linux")]
     if !crate::platform::linux::is_x11() {
-        let mut en = ENIGO.lock().unwrap();
-        let code = evt.chr() as u16;
-
-        if evt.down {
-            en.key_down(enigo::Key::Raw(code)).ok();
-        } else {
-            en.key_up(enigo::Key::Raw(code));
-        }
+        wayland_send_raw_key(evt.chr() as u16, evt.down);
         return;
     }
 
     sim_rdev_rawkey_position(evt.chr() as _, evt.down);
+}
+
+/// Send raw keycode on Wayland via the active backend (uinput or RemoteDesktop portal).
+/// The keycode is expected to be a Linux keycode (evdev code + 8 for X11 compatibility).
+#[cfg(target_os = "linux")]
+#[inline]
+fn wayland_send_raw_key(code: u16, down: bool) {
+    let mut en = ENIGO.lock().unwrap();
+    if down {
+        en.key_down(enigo::Key::Raw(code)).ok();
+    } else {
+        en.key_up(enigo::Key::Raw(code));
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1452,6 +1602,27 @@ fn get_control_key_value(key_event: &KeyEvent) -> i32 {
     } else {
         -1
     }
+}
+
+#[inline]
+fn has_hotkey_modifiers(key_event: &KeyEvent) -> bool {
+    key_event.modifiers.iter().any(|ck| {
+        let v = ck.value();
+        v == ControlKey::Control.value()
+            || v == ControlKey::RControl.value()
+            || v == ControlKey::Meta.value()
+            || v == ControlKey::RWin.value()
+            || {
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                {
+                    v == ControlKey::Alt.value() || v == ControlKey::RAlt.value()
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    false
+                }
+            }
+    })
 }
 
 fn release_unpressed_modifiers(en: &mut Enigo, key_event: &KeyEvent) {
@@ -1513,7 +1684,44 @@ fn need_to_uppercase(en: &mut Enigo) -> bool {
     get_modifier_state(Key::Shift, en) || get_modifier_state(Key::CapsLock, en)
 }
 
-fn process_chr(en: &mut Enigo, chr: u32, down: bool) {
+fn process_chr(en: &mut Enigo, chr: u32, down: bool, _hotkey: bool) {
+    // On Wayland with uinput mode:
+    // - ASCII printable: input via key events (custom keyboard path, e.g. portal keysym)
+    // - Non-ASCII: input via clipboard paste
+    #[cfg(target_os = "linux")]
+    if !crate::platform::linux::is_x11() && wayland_use_uinput() {
+        // Skip clipboard for hotkeys (Ctrl/Alt/Meta pressed)
+        if !is_hotkey_modifier_pressed(en) {
+            if let Ok(c) = char::try_from(chr) {
+                if is_ascii_printable(c) {
+                    if down {
+                        en.key_down(Key::Layout(c)).ok();
+                    } else {
+                        en.key_up(Key::Layout(c));
+                    }
+                } else if down {
+                    input_char_via_clipboard_server(en, c);
+                }
+            } else {
+                log::warn!(
+                    "Ignore invalid unicode scalar in Wayland+uinput path: {}",
+                    chr
+                );
+            }
+            return;
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    if !_hotkey {
+        if down {
+            if let Ok(chr) = char::try_from(chr) {
+                en.key_sequence(&chr.to_string());
+            }
+        }
+        return;
+    }
+
     let key = char_value_to_key(chr);
 
     if down {
@@ -1533,13 +1741,213 @@ fn process_chr(en: &mut Enigo, chr: u32, down: bool) {
 }
 
 fn process_unicode(en: &mut Enigo, chr: u32) {
+    // On Wayland with uinput mode:
+    // - ASCII printable: input via key sequence (custom keyboard path)
+    // - Non-ASCII: input via clipboard paste
+    #[cfg(target_os = "linux")]
+    if !crate::platform::linux::is_x11() && wayland_use_uinput() {
+        if let Ok(c) = char::try_from(chr) {
+            if is_ascii_printable(c) {
+                en.key_sequence(&c.to_string());
+            } else {
+                input_char_via_clipboard_server(en, c);
+            }
+        }
+        return;
+    }
+
     if let Ok(chr) = char::try_from(chr) {
         en.key_sequence(&chr.to_string());
     }
 }
 
 fn process_seq(en: &mut Enigo, sequence: &str) {
+    // On Wayland with uinput mode:
+    // - pure ASCII printable sequence: input via key sequence (custom keyboard path)
+    // - any non-ASCII present: input whole sequence via clipboard to preserve order
+    #[cfg(target_os = "linux")]
+    if !crate::platform::linux::is_x11() && wayland_use_uinput() {
+        if sequence.chars().all(is_ascii_printable) {
+            en.key_sequence(sequence);
+        } else {
+            input_text_via_clipboard_server(en, sequence);
+        }
+        return;
+    }
+
     en.key_sequence(&sequence);
+}
+
+/// Delay in milliseconds to wait for clipboard to sync on Wayland.
+/// This is an empirical value — Wayland provides no callback or event to confirm
+/// clipboard content has been received by the compositor. Under heavy system load,
+/// this delay may be insufficient, but there is no reliable alternative mechanism.
+#[cfg(target_os = "linux")]
+const CLIPBOARD_SYNC_DELAY_MS: u64 = 50;
+#[cfg(target_os = "linux")]
+const WAYLAND_CLIPBOARD_INPUT_FILTER_WINDOW: Duration = Duration::from_secs(1);
+#[cfg(target_os = "linux")]
+const WAYLAND_CLIPBOARD_INPUT_MAX_RECORDS: usize = 256;
+#[cfg(target_os = "linux")]
+pub(super) const WAYLAND_CLIPBOARD_INPUT_MAX_TEXT_CHARS: usize = 1024;
+
+#[cfg(target_os = "linux")]
+fn cleanup_wayland_clipboard_input_records(records: &mut Vec<(Instant, String)>, now: Instant) {
+    records.retain(|(created_at, _)| {
+        now.saturating_duration_since(*created_at) <= WAYLAND_CLIPBOARD_INPUT_FILTER_WINDOW
+    });
+    let len = records.len();
+    if len > WAYLAND_CLIPBOARD_INPUT_MAX_RECORDS {
+        records.drain(0..(len - WAYLAND_CLIPBOARD_INPUT_MAX_RECORDS));
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[inline]
+fn normalize_wayland_clipboard_input_text(text: &str) -> String {
+    text.chars()
+        .take(WAYLAND_CLIPBOARD_INPUT_MAX_TEXT_CHARS)
+        .collect()
+}
+
+#[cfg(target_os = "linux")]
+#[inline]
+fn get_wayland_clipboard_input_normalized_text(text: &str) -> Option<String> {
+    let normalized = normalize_wayland_clipboard_input_text(text);
+    if normalized.is_empty() {
+        return None;
+    }
+    Some(normalized)
+}
+
+#[cfg(target_os = "linux")]
+#[inline]
+fn record_wayland_clipboard_input_for_sync_filter(text: &str) -> Option<(Instant, String)> {
+    if text.is_empty() || crate::platform::linux::is_x11() {
+        return None;
+    }
+    let normalized = get_wayland_clipboard_input_normalized_text(text)?;
+    let now = Instant::now();
+    let mut records = WAYLAND_CLIPBOARD_INPUT_RECORDS.lock().unwrap();
+    cleanup_wayland_clipboard_input_records(&mut records, now);
+    records.push((now, normalized.clone()));
+    Some((now, normalized))
+}
+
+#[cfg(target_os = "linux")]
+#[inline]
+fn rollback_wayland_clipboard_input_record(record: (Instant, String)) {
+    let (created_at, normalized) = record;
+    let now = Instant::now();
+    let mut records = WAYLAND_CLIPBOARD_INPUT_RECORDS.lock().unwrap();
+    cleanup_wayland_clipboard_input_records(&mut records, now);
+    if let Some(pos) = records
+        .iter()
+        .rposition(|(record_created_at, record_normalized)| {
+            *record_created_at == created_at && *record_normalized == normalized
+        })
+    {
+        records.remove(pos);
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn is_recent_wayland_clipboard_input(text: &str) -> bool {
+    if text.is_empty() || crate::platform::linux::is_x11() {
+        return false;
+    }
+    let Some(normalized) = get_wayland_clipboard_input_normalized_text(text) else {
+        return false;
+    };
+    let now = Instant::now();
+    let mut records = WAYLAND_CLIPBOARD_INPUT_RECORDS.lock().unwrap();
+    cleanup_wayland_clipboard_input_records(&mut records, now);
+    records
+        .iter()
+        .any(|(_, record_normalized)| record_normalized == &normalized)
+}
+
+/// Internal: Set clipboard content without delay.
+/// Returns true if clipboard was set successfully.
+#[cfg(target_os = "linux")]
+fn set_clipboard_content(text: &str) -> bool {
+    if let Err(e) = crate::clipboard::set_text_clipboard_with_owner_sync(
+        text,
+        crate::clipboard::ClipboardSide::Host,
+    ) {
+        log::error!(
+            "set_clipboard_content: failed to set clipboard with owner marker: {:?}",
+            e
+        );
+        return false;
+    }
+    true
+}
+
+/// Set clipboard content for paste operation (sync version for use in blocking contexts).
+///
+/// Note: The original clipboard content is intentionally NOT restored after paste.
+/// Restoring clipboard could cause race conditions where subsequent keystrokes
+/// might accidentally paste the old clipboard content instead of the intended input.
+/// This trade-off prioritizes input reliability over preserving clipboard state.
+#[cfg(target_os = "linux")]
+#[inline]
+pub(super) fn set_clipboard_for_paste_sync(text: &str) -> bool {
+    let record = record_wayland_clipboard_input_for_sync_filter(text);
+    if !set_clipboard_content(text) {
+        if let Some(record) = record {
+            rollback_wayland_clipboard_input_record(record);
+        }
+        return false;
+    }
+    std::thread::sleep(std::time::Duration::from_millis(CLIPBOARD_SYNC_DELAY_MS));
+    true
+}
+
+/// Check if a character is ASCII printable (0x20-0x7E).
+#[cfg(target_os = "linux")]
+#[inline]
+pub(super) fn is_ascii_printable(c: char) -> bool {
+    c as u32 >= 0x20 && c as u32 <= 0x7E
+}
+
+/// Input a single character via clipboard + Shift+Insert in server process.
+#[cfg(target_os = "linux")]
+#[inline]
+fn input_char_via_clipboard_server(en: &mut Enigo, chr: char) {
+    input_text_via_clipboard_server(en, &chr.to_string());
+}
+
+/// Input text via clipboard + Shift+Insert in server process.
+/// Shift+Insert is more universal than Ctrl+V, works in both GUI apps and terminals.
+///
+/// Note: Clipboard content is NOT restored after paste - see `set_clipboard_for_paste_sync` for rationale.
+#[cfg(target_os = "linux")]
+fn input_text_via_clipboard_server(en: &mut Enigo, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    if !set_clipboard_for_paste_sync(text) {
+        return;
+    }
+
+    // Use ENIGO's custom_keyboard directly to avoid creating new IPC connections
+    // which would cause excessive logging and keyboard device creation/destruction
+    if en.key_down(Key::Shift).is_err() {
+        log::error!("input_text_via_clipboard_server: failed to press Shift, skipping paste");
+        return;
+    }
+    if en.key_down(Key::Raw(XKB_KEY_INSERT)).is_err() {
+        log::error!("input_text_via_clipboard_server: failed to press Insert, releasing Shift");
+        en.key_up(Key::Shift);
+        return;
+    }
+    en.key_up(Key::Raw(XKB_KEY_INSERT));
+    en.key_up(Key::Shift);
+
+    // Brief delay to allow the target application to process the paste event.
+    // Empirical value — no reliable synchronization mechanism exists on Wayland.
+    std::thread::sleep(std::time::Duration::from_millis(20));
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -1576,6 +1984,64 @@ fn is_function_key(ck: &EnumOrUnknown<ControlKey>) -> bool {
     return res;
 }
 
+/// Check if any hotkey modifier (Ctrl/Alt/Meta) is currently pressed.
+/// Used to detect hotkey combinations like Ctrl+C, Alt+Tab, etc.
+///
+/// Note: Shift is intentionally NOT checked here. Shift+character produces a different
+/// character (e.g., Shift+a → 'A'), which is normal text input, not a hotkey.
+/// Shift is only relevant as a hotkey modifier when combined with Ctrl/Alt/Meta
+/// (e.g., Ctrl+Shift+Z), in which case this function already returns true via Ctrl.
+#[cfg(target_os = "linux")]
+#[inline]
+fn is_hotkey_modifier_pressed(en: &mut Enigo) -> bool {
+    get_modifier_state(Key::Control, en)
+        || get_modifier_state(Key::RightControl, en)
+        || get_modifier_state(Key::Alt, en)
+        || get_modifier_state(Key::RightAlt, en)
+        || get_modifier_state(Key::Meta, en)
+        || get_modifier_state(Key::RWin, en)
+}
+
+/// Release Shift keys before character input in Legacy/Translate mode.
+/// In these modes, the character has already been converted by the client,
+/// so we should input it directly without Shift modifier affecting the result.
+///
+/// Note: Does NOT release Shift if hotkey modifiers (Ctrl/Alt/Meta) are pressed,
+/// to preserve combinations like Ctrl+Shift+Z.
+#[cfg(target_os = "linux")]
+fn release_shift_for_char_input(en: &mut Enigo) {
+    // Don't release Shift if hotkey modifiers (Ctrl/Alt/Meta) are pressed.
+    // This preserves combinations like Ctrl+Shift+Z.
+    if is_hotkey_modifier_pressed(en) {
+        return;
+    }
+
+    // In translate mode, the client has already converted the keystroke to a character
+    // (e.g., Shift+a → 'A'). We release Shift here so the server inputs the character
+    // directly without Shift affecting the result.
+    //
+    // Shift is intentionally NOT restored after input — the client will send an explicit
+    // Shift key_up event when the user physically releases Shift. Restoring it here would
+    // cause a brief Shift re-press that could interfere with the next input event.
+
+    let is_x11 = crate::platform::linux::is_x11();
+
+    if get_modifier_state(Key::Shift, en) {
+        if !is_x11 {
+            en.key_up(Key::Shift);
+        } else {
+            simulate_(&EventType::KeyRelease(RdevKey::ShiftLeft));
+        }
+    }
+    if get_modifier_state(Key::RightShift, en) {
+        if !is_x11 {
+            en.key_up(Key::RightShift);
+        } else {
+            simulate_(&EventType::KeyRelease(RdevKey::ShiftRight));
+        }
+    }
+}
+
 fn legacy_keyboard_mode(evt: &KeyEvent) {
     crate::mm_debug!("MouseMux v2.2 protocol: legacy_keyboard_mode() called - union={:?}, down={}", evt.union, evt.down);
     #[cfg(windows)]
@@ -1596,11 +2062,24 @@ fn legacy_keyboard_mode(evt: &KeyEvent) {
             process_control_key(&mut en, &ck, down)
         }
         Some(key_event::Union::Chr(chr)) => {
+            // For character input in Legacy mode, we need to release Shift first.
+            // The character has already been converted by the client, so we should
+            // input it directly without Shift modifier affecting the result.
+            // Only Ctrl/Alt/Meta should be kept for hotkeys like Ctrl+C.
+            #[cfg(target_os = "linux")]
+            release_shift_for_char_input(&mut en);
+
             let record_key = chr as u64 + KEY_CHAR_START;
             record_pressed_key(KeysDown::EnigoKey(record_key), down);
-            process_chr(&mut en, chr, down)
+            process_chr(&mut en, chr, down, has_hotkey_modifiers(evt))
         }
-        Some(key_event::Union::Unicode(chr)) => process_unicode(&mut en, chr),
+        Some(key_event::Union::Unicode(chr)) => {
+            // Same as Chr: release Shift for Unicode input
+            #[cfg(target_os = "linux")]
+            release_shift_for_char_input(&mut en);
+
+            process_unicode(&mut en, chr)
+        }
         Some(key_event::Union::Seq(ref seq)) => process_seq(&mut en, seq),
         _ => {}
     }
@@ -1621,6 +2100,55 @@ fn translate_process_code(code: u32, down: bool) {
 fn translate_keyboard_mode(evt: &KeyEvent) {
     match &evt.union {
         Some(key_event::Union::Seq(seq)) => {
+            // On Wayland:
+            // - uinput mode (--service): keep clipboard handling in this process because
+            //   clipboard is unreliable in root service context.
+            // - rdp_input mode (--server): forward sequence to custom keyboard handler so
+            //   ASCII can use Portal keysym and non-ASCII can use clipboard.
+            #[cfg(target_os = "linux")]
+            if !crate::platform::linux::is_x11() {
+                let mut en = ENIGO.lock().unwrap();
+                if wayland_use_rdp_input() {
+                    release_shift_for_char_input(&mut en);
+                    en.key_sequence(seq);
+                    return;
+                }
+
+                if wayland_use_uinput() {
+                    // Check if this is a hotkey (Ctrl/Alt/Meta pressed)
+                    // For hotkeys, we send character-based key events via Enigo instead of
+                    // using the clipboard. This relies on the local keyboard layout for
+                    // mapping characters to physical keys.
+                    // This assumes client and server use the same keyboard layout (common case).
+                    // Note: For non-Latin keyboards (e.g., Arabic), hotkeys may not work
+                    // correctly if the character cannot be mapped to a key via KEY_MAP_LAYOUT.
+                    // This is a known limitation - most common hotkeys (Ctrl+A/C/V/Z) use Latin
+                    // characters which are mappable on most keyboard layouts.
+                    if is_hotkey_modifier_pressed(&mut en) {
+                        // For hotkeys, send character-based key events via Enigo.
+                        // This relies on the local keyboard layout mapping (KEY_MAP_LAYOUT).
+                        for chr in seq.chars() {
+                            if !is_ascii_printable(chr) {
+                                log::warn!(
+                                    "Hotkey with non-ASCII character may not work correctly on non-Latin keyboard layouts"
+                                );
+                            }
+                            en.key_click(Key::Layout(chr));
+                        }
+                        return;
+                    }
+
+                    // Normal text input: release Shift and use clipboard
+                    release_shift_for_char_input(&mut en);
+                    if seq.chars().all(is_ascii_printable) {
+                        en.key_sequence(seq);
+                    } else {
+                        input_text_via_clipboard_server(&mut en, seq);
+                    }
+                    return;
+                }
+            }
+
             // Fr -> US
             // client: Shift + & => 1(send to remote)
             // remote: Shift + 1 => !
@@ -1638,11 +2166,16 @@ fn translate_keyboard_mode(evt: &KeyEvent) {
                 #[cfg(target_os = "linux")]
                 let simulate_win_hot_key = false;
                 if !simulate_win_hot_key {
-                    if get_modifier_state(Key::Shift, &mut en) {
-                        simulate_(&EventType::KeyRelease(RdevKey::ShiftLeft));
-                    }
-                    if get_modifier_state(Key::RightShift, &mut en) {
-                        simulate_(&EventType::KeyRelease(RdevKey::ShiftRight));
+                    #[cfg(target_os = "linux")]
+                    release_shift_for_char_input(&mut en);
+                    #[cfg(target_os = "windows")]
+                    {
+                        if get_modifier_state(Key::Shift, &mut en) {
+                            simulate_(&EventType::KeyRelease(RdevKey::ShiftLeft));
+                        }
+                        if get_modifier_state(Key::RightShift, &mut en) {
+                            simulate_(&EventType::KeyRelease(RdevKey::ShiftRight));
+                        }
                     }
                 }
                 for chr in seq.chars() {
@@ -1662,7 +2195,16 @@ fn translate_keyboard_mode(evt: &KeyEvent) {
         Some(key_event::Union::Chr(..)) => {
             #[cfg(target_os = "windows")]
             translate_process_code(evt.chr(), evt.down);
-            #[cfg(not(target_os = "windows"))]
+            #[cfg(target_os = "linux")]
+            {
+                if !crate::platform::linux::is_x11() {
+                    // Wayland: use uinput to send raw keycode
+                    wayland_send_raw_key(evt.chr() as u16, evt.down);
+                } else {
+                    sim_rdev_rawkey_position(evt.chr() as _, evt.down);
+                }
+            }
+            #[cfg(target_os = "macos")]
             sim_rdev_rawkey_position(evt.chr() as _, evt.down);
         }
         Some(key_event::Union::Unicode(..)) => {
@@ -1673,7 +2215,11 @@ fn translate_keyboard_mode(evt: &KeyEvent) {
             simulate_win2win_hotkey(*code, evt.down);
         }
         _ => {
-            log::debug!("Unreachable. Unexpected key event {:?}", &evt);
+            log::debug!(
+                "Unreachable. Unexpected key event (mode={:?}, down={:?})",
+                &evt.mode,
+                &evt.down
+            );
         }
     }
 }
@@ -1901,6 +2447,51 @@ pub fn wayland_use_uinput() -> bool {
 #[cfg(target_os = "linux")]
 pub fn wayland_use_rdp_input() -> bool {
     !crate::platform::is_x11() && !crate::is_server()
+}
+
+#[cfg(target_os = "linux")]
+pub struct TemporaryMouseMoveHandle {
+    thread_handle: Option<std::thread::JoinHandle<()>>,
+    tx: Option<mpsc::Sender<(i32, i32)>>,
+}
+
+#[cfg(target_os = "linux")]
+impl TemporaryMouseMoveHandle {
+    pub fn new() -> Self {
+        let (tx, rx) = mpsc::channel::<(i32, i32)>();
+        let thread_handle = std::thread::spawn(move || {
+            log::debug!("TemporaryMouseMoveHandle thread started");
+            for (x, y) in rx {
+                ENIGO.lock().unwrap().mouse_move_to(x, y);
+            }
+            log::debug!("TemporaryMouseMoveHandle thread exiting");
+        });
+        TemporaryMouseMoveHandle {
+            thread_handle: Some(thread_handle),
+            tx: Some(tx),
+        }
+    }
+
+    pub fn move_mouse_to(&self, x: i32, y: i32) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.send((x, y));
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for TemporaryMouseMoveHandle {
+    fn drop(&mut self) {
+        log::debug!("Dropping TemporaryMouseMoveHandle");
+        // Close the channel to signal the thread to exit.
+        self.tx.take();
+        // Wait for the thread to finish.
+        if let Some(thread_handle) = self.thread_handle.take() {
+            if let Err(e) = thread_handle.join() {
+                log::error!("Error joining TemporaryMouseMoveHandle thread: {:?}", e);
+            }
+        }
+    }
 }
 
 lazy_static::lazy_static! {

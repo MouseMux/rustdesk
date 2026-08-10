@@ -146,9 +146,14 @@ fn main() {
         }
         i += 1;
     }
-    // MouseMux V2.2: Never trigger install mode - user will handle installation
-    // Installation is managed externally by MouseMux launcher
-    let quick_support = args.is_empty() && arg_exe.to_lowercase().ends_with("qs.exe");
+    // MouseMux: never trigger install mode - installation is managed externally by
+    // the MouseMux launcher. Upstream's `click_setup` is deliberately not carried
+    // over; the code below no longer consults it. Upstream's platform-guarded
+    // quick-support detection IS adopted.
+    #[cfg(windows)]
+    let quick_support = args.is_empty() && win::is_quick_support_exe(&arg_exe);
+    #[cfg(not(windows))]
+    let quick_support = false;
 
     let mut ui = false;
     let reader = BinaryReader::default();
@@ -193,5 +198,13 @@ mod windows {
             .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
             .output();
         let _allow_err = std::fs::copy(src, &format!("{}\\{}", dir.to_string_lossy(), tgt));
+    }
+
+    /// Check if the executable is a Quick Support version.
+    /// Note: This function must be kept in sync with `src/core_main.rs`.
+    #[inline]
+    pub(super) fn is_quick_support_exe(exe: &str) -> bool {
+        let exe = exe.to_lowercase();
+        exe.contains("-qs-") || exe.contains("-qs.exe") || exe.contains("_qs.exe")
     }
 }
