@@ -3,7 +3,7 @@
 **Created:** 2026-08-09
 **Branch:** `mousemux-v2.2-flutter-complete`
 **Base reviewed against:** upstream `db4296533` (RustDesk 1.4.3)
-**Current version:** `1.4.3-mousemux-v2.3`
+**Current version:** `1.4.3-mousemux-v2.4`
 
 This document is the single source of truth for the remediation effort started
 2026-08-09. It lives inside the git repo so it is pullable from any machine.
@@ -94,25 +94,25 @@ Severity: **C**ritical / **M**oderate / **L**ow
 
 | # | Sev | Title | Status |
 |---|-----|-------|--------|
-| 1 | C | `hbb_common` pinned commit is unreachable — build not reproducible | FIXED (local) — fork not yet pushed |
-| 2 | C | `APP_NAME` customization reverted — collides with stock RustDesk | FIXED — needs build to verify |
-| 3 | C | Remotely-triggerable panic on non-ASCII peer names | FIXED — needs build |
-| 4 | C | Shutdown deadlock — process hangs on exit | FIXED — needs build |
-| 5 | C | Per-connection keyboard ID race between simultaneous users | FIXED — needs build |
-| 6 | C | MouseMux ID leak when MouseMux not running at disconnect | FIXED — needs build |
-| 7 | M | User count drifts, mismatch only logged never corrected | FIXED — needs build |
-| 8 | M | `std::process::exit(0)` in `window_proc` skips all cleanup | FIXED — needs build |
-| 9 | M | Lock-poisoning inconsistency; panic can unwind out of `window_proc` | FIXED — needs build |
+| 1 | C | `hbb_common` pinned commit is unreachable — build not reproducible | VERIFIED in v2.4 (local) — fork not yet pushed |
+| 2 | C | `APP_NAME` customization reverted — collides with stock RustDesk | VERIFIED in v2.4 |
+| 3 | C | Remotely-triggerable panic on non-ASCII peer names | VERIFIED in v2.4 |
+| 4 | C | Shutdown deadlock — process hangs on exit | VERIFIED in v2.4 |
+| 5 | C | Per-connection keyboard ID race between simultaneous users | VERIFIED in v2.4 |
+| 6 | C | MouseMux ID leak when MouseMux not running at disconnect | VERIFIED in v2.4 |
+| 7 | M | User count drifts, mismatch only logged never corrected | VERIFIED in v2.4 |
+| 8 | M | `std::process::exit(0)` in `window_proc` skips all cleanup | VERIFIED in v2.4 |
+| 9 | M | Lock-poisoning inconsistency; panic can unwind out of `window_proc` | VERIFIED in v2.4 |
 | 10 | M | Version constant mismatch: code 143 vs protocol spec 142 | CLOSED — not a bug, see below |
-| 11 | M | Thread spam on every `MOUSEMUX_STARTUP_BROADCAST` | FIXED — needs build |
-| 12 | M | `RegisterClassExA` not idempotent — re-init fails | FIXED — needs build |
-| 13 | L | Per-keystroke `info!` logging in the input hot path | FIXED — needs build |
-| 14 | L | `pending_peer_info` duplicates `connections[].peer_info` | FIXED — needs build |
-| 15 | L | Unused `_hwnd` param / bound-but-unused `user_id` | FIXED — needs build |
+| 11 | M | Thread spam on every `MOUSEMUX_STARTUP_BROADCAST` | VERIFIED in v2.4 |
+| 12 | M | `RegisterClassExA` not idempotent — re-init fails | VERIFIED in v2.4 |
+| 13 | L | Per-keystroke `info!` logging in the input hot path | VERIFIED in v2.4 |
+| 14 | L | `pending_peer_info` duplicates `connections[].peer_info` | VERIFIED in v2.4 |
+| 15 | L | Unused `_hwnd` param / bound-but-unused `user_id` | VERIFIED in v2.4 |
 | 16 | L | Non-BMP chars sent as single `u32` may corrupt in a WCHAR buffer | SUPERSEDED by 18 |
-| 17 | L | Support URLs drifted between Sciter and Flutter UIs | FIXED — needs build |
-| 18 | C | Peer name encoding mismatch — RustDesk 1 msg/char vs MouseMux 4 msgs/char | FIXED — needs build |
-| 19 | L | Touch-scale path never sets `current_conn_id`, inherits a stale one | FIXED — needs build |
+| 17 | L | Support URLs drifted between Sciter and Flutter UIs | VERIFIED in v2.4 |
+| 18 | C | Peer name encoding mismatch — RustDesk 1 msg/char vs MouseMux 4 msgs/char | VERIFIED in v2.4 |
+| 19 | L | Touch-scale path never sets `current_conn_id`, inherits a stale one | VERIFIED in v2.4 |
 | 20 | C | hwcodec build fix lives outside the repo, in the cargo cache | OPEN |
 
 ---
@@ -726,6 +726,8 @@ Small and well-isolated. The bulk is a **new file** that cannot conflict:
 |---------|------|----------|--------|-------|
 | 1.4.3-mousemux-v2.2 | 2026-02-10 | pre-review state | `backups/2026-08-09_pre-hbb-restore/` | APP_NAME regression present. Full 4.66 GB snapshot incl. `target/`, so rollback needs no rebuild |
 | 1.4.3-mousemux-v2.3 | 2026-08-09 | Findings 1,2,3,4,5,6,17,18 | `final-builds/rustdesk-mousemux-1.4.3-mousemux-v2.3-2026-08-09_15-27/` | 66 MB. librustdesk.dll rebuilt 15:20, 28,486,656 bytes, verified byte-identical in archive. Contains `rustdesk-mousemux-edition` ×2 and `1.4.3-mousemux-v2.3` ×2. **First build since 2026-02-10 in which librustdesk.dll was actually recompiled.** No installer/zip produced yet. |
+
+| 1.4.3-mousemux-v2.4 | 2026-08-10 | **all findings except 20** — adds 7,8,9,11,12,13,14,15,19 | `final-builds/rustdesk-mousemux-1.4.3-mousemux-v2.4-nohwcodec-2026-08-10_10-43/` | librustdesk.dll 28,483,072 bytes, built 10:40. Verified in binary: version ×2, branding ×2, per-event log strings ×0, avcodec ×0 (no hwcodec). Release.zip 28,886,532 bytes, integrity checked, archive byte-identical to build output. No installer. **Not runtime-tested.** |
 
 ### Build environment gotchas (learned 2026-08-09)
 
