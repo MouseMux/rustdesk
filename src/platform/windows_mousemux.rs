@@ -13,7 +13,7 @@ use winapi::{
         windef::HWND,
     },
     um::winuser::{
-        CreateWindowExA, DefWindowProcA, DispatchMessageA, FindWindowA,
+        CreateWindowExA, DefWindowProcA, DispatchMessageA, FindWindowExA,
         GetMessageA, PostMessageA, PostQuitMessage, RegisterClassExA, SetWindowTextA, TranslateMessage,
         MSG, WNDCLASSEXA, CS_HREDRAW, CS_VREDRAW, WM_CLOSE, WM_DESTROY,
     },
@@ -41,7 +41,11 @@ const MOUSEMUX_EXITING: u32 = WM_APP + 210;              // MouseMux is exiting 
 
 // Protocol version and RustDesk version
 const PROTOCOL_VERSION: u32 = 122;  // V2.2 = 122
-const RUSTDESK_VERSION: u32 = 143;  // 1.4.3 = 143
+// Reported to MouseMux in NOTIFY_STARTUP/NOTIFY_SHUTDOWN. MouseMux validates this
+// as a RANGE (VERS_MIN=100, VERS_MAX=999 in rustdesk_validation.c), not an exact
+// match, so a stale value still connects - it just misreports which RustDesk this
+// is in MouseMux's own logs and UI. Keep it in step with the upstream base version.
+const RUSTDESK_VERSION: u32 = 149;  // 1.4.9 = 149
 
 // MouseMux window classes to look for, in priority order.
 //
@@ -67,9 +71,27 @@ const MOUSEMUX_WINDOW_CLASSES: &[&str] = &[
     "mousemux.main.window.query", // legacy / unversioned
 ];
 
-// Window class and title for RustDesk's receiver window
-const WINDOW_CLASS_NAME: &str = "rustdesk.mousemux.window.query\0";
-const WINDOW_TITLE: &str = "rustdesk.mousemux.window.query\0";
+// RustDesk's receiver window(s).
+//
+// Naming standard: <slug>.<component>.<kind>[.<qualifier>] - all lowercase, dots as
+// the only separator, hyphens only inside a token, slug always first so that
+// "mousemux-v3.*" selects everything belonging to one MouseMux version.
+//
+// PRIMARY conforms to that standard. LEGACY is the historic name, which put the
+// component first and carried no version. It is still registered because MouseMux
+// discovers RustDesk BY NAME in three places - rustdesk_receiver.c:122,
+// rustdesk_state.c:157, rustdesk_validation.c:245 - all hardcoded to the legacy
+// constant MOUSEMUX_SHARED_NAME_RUSTDESK_WINDOW. Registering only the new name
+// would leave the currently shipping MouseMux unable to find RustDesk at all.
+//
+// Both windows route to the same window_proc, so MouseMux may address either. The
+// PRIMARY handle is what NOTIFY_STARTUP reports, so MouseMux ends up holding the
+// new one either way. Delete LEGACY once those three C call sites are versioned.
+//
+// Class and title are deliberately identical: MouseMux searches with FindWindowEx
+// passing both, and a class-only search does not match these windows.
+const WINDOW_CLASS_PRIMARY: &str = "mousemux-v3.rustdesk.window.query\0";
+const WINDOW_CLASS_LEGACY: &str = "rustdesk.mousemux.window.query\0";
 
 // Peer info max length
 const MAX_PEER_INFO_LENGTH: usize = 256;
@@ -121,11 +143,12 @@ lazy_static::lazy_static! {
 /// Guards against duplicate re-registration threads (Finding 11).
 static REREGISTER_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
-/// Set once the window class has been registered (Finding 12).
-///
-/// `RegisterClassExA` fails with ERROR_CLASS_ALREADY_EXISTS on a second call, so
-/// re-initialising after a shutdown used to fail outright.
-static CLASS_REGISTERED: AtomicBool = AtomicBool::new(false);
+// Finding 12 (class registration idempotency) is now handled per class inside
+// create_one_window: a window class outlives the windows created from it, so after
+// shutdown_mousemux_window() the class is still registered and RegisterClassExA
+// returns ERROR_CLASS_ALREADY_EXISTS (1410). That specific error is treated as
+// success rather than failing initialisation. No global flag is needed, and a flag
+// would in fact be wrong now that there is more than one class.
 
 // ---------------------------------------------------------------------------
 // Poison-tolerant lock helpers (Finding 9)
@@ -404,11 +427,25 @@ unsafe extern "system" fn window_proc(
 }
 
 /// Create hidden top-level window for receiving MouseMux messages
-/// NOTE: Not a message-only window (HWND_MESSAGE) because MouseMux needs to find it via FindWindowA
+/// NOTE: Not a message-only window (HWND_MESSAGE) because MouseMux needs to find it
+/// via FindWindowEx. Class and title are deliberately the same string - MouseMux
+/// searches with both, and a class-only search does not match these windows.
 fn create_message_window() -> Result<HWND, String> {
+    // The primary window's HWND is the one reported to MouseMux in NOTIFY_STARTUP.
+    let primary = create_one_window(WINDOW_CLASS_PRIMARY, true)?;
+    // Best-effort: a failure here only costs compatibility with older MouseMux,
+    // so log it rather than failing initialisation outright.
+    if let Err(e) = create_one_window(WINDOW_CLASS_LEGACY, false) {
+        log::warn!("MouseMux v2.2 protocol: legacy alias window not created: {}", e);
+    }
+    Ok(primary)
+}
+
+/// Register (once) and create one receiver window for the given class string.
+/// `class` must be NUL-terminated; class and title are the same string.
+fn create_one_window(class: &str, is_primary: bool) -> Result<HWND, String> {
     unsafe {
-        // Register window class
-        let class_name = WINDOW_CLASS_NAME.as_ptr() as *const i8;
+        let class_name = class.as_ptr() as *const i8;
 
         let wnd_class = WNDCLASSEXA {
             cbSize: std::mem::size_of::<WNDCLASSEXA>() as u32,
@@ -430,32 +467,29 @@ fn create_message_window() -> Result<HWND, String> {
         // the class is still registered and a second RegisterClassExA fails with
         // ERROR_CLASS_ALREADY_EXISTS (1410) - which made re-initialisation fail
         // outright rather than reusing the perfectly good existing class.
-        if !CLASS_REGISTERED.load(Ordering::SeqCst) {
-            let atom = RegisterClassExA(&wnd_class);
-            if atom == 0 {
-                const ERROR_CLASS_ALREADY_EXISTS: i32 = 1410;
-                let err = std::io::Error::last_os_error();
-                if err.raw_os_error() != Some(ERROR_CLASS_ALREADY_EXISTS) {
-                    return Err(format!("Failed to register window class, error: {}", err));
-                }
-                // Already registered by an earlier init in this process - fine.
-                log::info!("MouseMux v2.2 protocol: Window class already registered, reusing it");
+        let atom = RegisterClassExA(&wnd_class);
+        if atom == 0 {
+            const ERROR_CLASS_ALREADY_EXISTS: i32 = 1410;
+            let err = std::io::Error::last_os_error();
+            if err.raw_os_error() != Some(ERROR_CLASS_ALREADY_EXISTS) {
+                return Err(format!("Failed to register window class '{}', error: {}",
+                                   class.trim_end_matches('\0'), err));
             }
-            CLASS_REGISTERED.store(true, Ordering::SeqCst);
+            // Already registered by an earlier init in this process - reuse it.
         }
 
         // Create hidden top-level window (NOT message-only, so MouseMux can find it)
-        // CRITICAL: MouseMux needs to find this window using FindWindowA, which cannot
+        // CRITICAL: MouseMux needs to find this window using FindWindowEx, which cannot
         // locate message-only windows (HWND_MESSAGE parent). Therefore, we create a
         // normal hidden window (parent = NULL) that is findable but not visible.
-        let window_title = WINDOW_TITLE.as_ptr() as *const i8;
+        let window_title = class_name; // title == class, see the note on the constants
         let hwnd = CreateWindowExA(
             0,                      // dwExStyle
             class_name,             // lpClassName
             window_title,           // lpWindowName
             0,                      // dwStyle (hidden window, no WS_VISIBLE)
             0, 0, 0, 0,             // x, y, width, height
-            std::ptr::null_mut(),   // hWndParent (NULL = top-level, findable by FindWindowA)
+            std::ptr::null_mut(),   // hWndParent (NULL = top-level, findable by FindWindowEx)
             std::ptr::null_mut(),   // hMenu
             std::ptr::null_mut(),   // hInstance
             std::ptr::null_mut(),   // lpParam
@@ -468,7 +502,12 @@ fn create_message_window() -> Result<HWND, String> {
             ));
         }
 
-        log::info!("MouseMux v2.2 protocol: Created message window HWND: {:?}", hwnd);
+        log::info!(
+            "MouseMux v2.2 protocol: Created {} receiver window '{}' HWND: {:?}",
+            if is_primary { "primary" } else { "legacy-alias" },
+            class.trim_end_matches('\0'),
+            hwnd
+        );
         Ok(hwnd)
     }
 }
@@ -704,7 +743,27 @@ fn find_mousemux_window() -> Option<HWND> {
             let Ok(class_name) = CString::new(*class) else {
                 continue;
             };
-            let hwnd = FindWindowA(class_name.as_ptr(), std::ptr::null());
+            // MUST pass the window TITLE as well as the class.
+            //
+            // Searching by class alone returns NULL for these windows - verified on a
+            // live system for BOTH MouseMux's window and our own:
+            //     FindWindowEx(NULL, NULL, "mousemux-v3.main.window.query", NULL)  -> 0
+            //     FindWindowEx(NULL, NULL, "mousemux-v3.main.window.query",
+            //                              "mousemux-v3.main.window.query")        -> found
+            // The previous code called FindWindowA(class, NULL), so it could never
+            // locate MouseMux regardless of which class name it tried.
+            //
+            // MouseMux's own C code does the same thing (rustdesk_receiver.c):
+            //     FindWindowEx(NULL, NULL, MOUSEMUX_VERSIONED_NAME_MAIN_WINDOW_QUERY,
+            //                              MOUSEMUX_VERSIONED_NAME_MAIN_WINDOW_QUERY)
+            // Both sides name the window identically to its class, so the same string
+            // is passed twice.
+            let hwnd = FindWindowExA(
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                class_name.as_ptr(),
+                class_name.as_ptr(),
+            );
             if !hwnd.is_null() {
                 // Only log on a change, otherwise this fires on every protocol send.
                 let mut last = LAST_FOUND_CLASS.lock().unwrap_or_else(|e| e.into_inner());
