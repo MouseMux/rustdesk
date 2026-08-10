@@ -825,6 +825,9 @@ impl Connection {
                         }
                         #[cfg(target_os = "windows")]
                         ipc::Data::ClipboardFile(clip) => {
+                            if !conn.is_remote() {
+                                continue;
+                            }
                             match clip {
                                 clipboard::ClipboardFile::Files { files } => {
                                     let files = files.into_iter().map(|(f, s)| {
@@ -3990,7 +3993,15 @@ impl Connection {
         let map_mutex = &LOGIN_FAILURES[i];
         if remove {
             if failure.0 != 0 {
-                LOGIN_FAILURES[i].lock().unwrap().remove(&self.ip);
+                if let Some((p64, p56, p48)) = self.get_ipv6_prefixes() {
+                    let mut m = map_mutex.lock().unwrap();
+                    m.remove(&p64);
+                    m.remove(&p56);
+                    m.remove(&p48);
+                    m.remove(&self.ip);
+                } else {
+                    map_mutex.lock().unwrap().remove(&self.ip);
+                }
             }
             return;
         }
@@ -6660,6 +6671,11 @@ mod raii {
                 scrap::wayland::pipewire::try_close_session();
             }
             Self::check_wake_lock();
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            {
+                use crate::whiteboard;
+                whiteboard::unregister_whiteboard(whiteboard::get_key_cursor(self.0));
+            }
         }
     }
 
