@@ -73,7 +73,6 @@ pub struct MouseMuxConnectionIDs {
 pub struct MouseMuxState {
     pub hwnd: Option<SendSyncHwnd>,  // RustDesk's message window handle
     pub connections: HashMap<i32, MouseMuxConnectionIDs>,  // conn_id → IDs
-    pub pending_peer_info: HashMap<i32, String>,  // Temporary storage while receiving WM_APP+32
 }
 
 impl MouseMuxState {
@@ -81,7 +80,6 @@ impl MouseMuxState {
         Self {
             hwnd: None,
             connections: HashMap::new(),
-            pending_peer_info: HashMap::new(),
         }
     }
 }
@@ -200,7 +198,11 @@ unsafe extern "system" fn window_proc(
                 // `if let Ok(..)` silently skipped ID assignment instead.
                 let mut state = lock_state();
                 // Get peer_info before mutable borrow
-                let peer_info = state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default();
+                // request_ids() always inserts the connection (with its peer_info)
+                // before the IDs can come back, so this or_insert is only a guard
+                // against a disconnect racing the reply - in which case an empty
+                // name is correct anyway.
+                let peer_info = String::new();
                 let entry = state.connections
                     .entry(conn_id)
                     .or_insert(MouseMuxConnectionIDs {
@@ -244,7 +246,11 @@ unsafe extern "system" fn window_proc(
                 // `if let Ok(..)` silently skipped ID assignment instead.
                 let mut state = lock_state();
                 // Get peer_info before mutable borrow
-                let peer_info = state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default();
+                // request_ids() always inserts the connection (with its peer_info)
+                // before the IDs can come back, so this or_insert is only a guard
+                // against a disconnect racing the reply - in which case an empty
+                // name is correct anyway.
+                let peer_info = String::new();
                 let entry = state.connections
                     .entry(conn_id)
                     .or_insert(MouseMuxConnectionIDs {
@@ -441,7 +447,7 @@ fn create_message_window() -> Result<HWND, String> {
 }
 
 /// Message loop thread - runs GetMessage loop
-fn message_loop_thread(_hwnd: HWND) {
+fn message_loop_thread() {
     log::info!("MouseMux v2.2 protocol: Starting message loop thread");
 
     unsafe {
@@ -489,7 +495,7 @@ pub fn init_mousemux_window() -> Result<(), String> {
         tx.send(Ok(())).ok();
 
         // Run message loop on this same thread
-        message_loop_thread(hwnd);
+        message_loop_thread();
     });
 
     // Wait for window creation to complete
@@ -544,7 +550,6 @@ pub fn shutdown_mousemux_window() {
         let mut state = lock_state();
         state.hwnd = None;
         state.connections.clear();
-        state.pending_peer_info.clear();
     }
 
     log::info!("MouseMux v2.2 protocol: Message window shut down");
@@ -790,8 +795,6 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
     // will find this connection in the HashMap and request IDs for it
     {
         let mut state = lock_state();
-        state.pending_peer_info.insert(conn_id, peer_info.to_string());
-
         // Create or update connection entry with peer_info
         state.connections
             .entry(conn_id)
@@ -968,9 +971,6 @@ pub fn release_ids(conn_id: i32) -> bool {
     // re-registered by re_request_all_active_connections() on the next MouseMux
     // start, and keeps has_ids() reporting a stale connection to the UI.
     clear_ids_for_connection(conn_id);
-
-    // Also remove from pending_peer_info
-    lock_state().pending_peer_info.remove(&conn_id);
 
     // Local state is now clean; notify MouseMux only if it is actually running.
     let mousemux_hwnd = match find_mousemux_window() {

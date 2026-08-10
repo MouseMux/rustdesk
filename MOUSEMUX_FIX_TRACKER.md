@@ -107,12 +107,12 @@ Severity: **C**ritical / **M**oderate / **L**ow
 | 11 | M | Thread spam on every `MOUSEMUX_STARTUP_BROADCAST` | FIXED — needs build |
 | 12 | M | `RegisterClassExA` not idempotent — re-init fails | FIXED — needs build |
 | 13 | L | Per-keystroke `info!` logging in the input hot path | FIXED — needs build |
-| 14 | L | `pending_peer_info` duplicates `connections[].peer_info` | OPEN |
-| 15 | L | Unused `_hwnd` param / bound-but-unused `user_id` | OPEN |
+| 14 | L | `pending_peer_info` duplicates `connections[].peer_info` | FIXED — needs build |
+| 15 | L | Unused `_hwnd` param / bound-but-unused `user_id` | FIXED — needs build |
 | 16 | L | Non-BMP chars sent as single `u32` may corrupt in a WCHAR buffer | SUPERSEDED by 18 |
 | 17 | L | Support URLs drifted between Sciter and Flutter UIs | FIXED — needs build |
 | 18 | C | Peer name encoding mismatch — RustDesk 1 msg/char vs MouseMux 4 msgs/char | FIXED — needs build |
-| 19 | L | Touch-scale path never sets `current_conn_id`, inherits a stale one | OPEN |
+| 19 | L | Touch-scale path never sets `current_conn_id`, inherits a stale one | FIXED — needs build |
 | 20 | C | hwcodec build fix lives outside the repo, in the cargo cache | OPEN |
 
 ---
@@ -453,8 +453,10 @@ Decision: send 4 UTF-32 LE bytes per character, ASCII-clamped, no MouseMux chang
 
 ### Finding 19 — Touch-scale path inherits a stale conn_id (LOW)
 
-**Status:** OPEN — deliberately not fixed as part of Finding 5, to keep that change
-scoped.
+**Status:** FIXED 2026-08-10 — needs build.
+`handle_pointer_` now takes `INPUT_SERIALIZE` and sets `current_conn_id`, matching
+`handle_mouse_` and preserving the INPUT_SERIALIZE→ENIGO lock order. The ENIGO
+guard is released immediately, so `handle_scale`'s own lock is unaffected.
 
 `handle_pointer_` (`input_service.rs:1026`) routes touch ScaleUpdate to
 `handle_scale`, which takes the ENIGO lock and synthesises input, but **never calls

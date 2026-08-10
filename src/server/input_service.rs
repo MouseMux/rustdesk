@@ -1032,6 +1032,18 @@ pub fn handle_pointer_(evt: &PointerDeviceEvent, conn: i32) {
         return;
     }
 
+    // Finding 19: this path synthesises input via ENIGO but never set
+    // current_conn_id, so a pinch/scale event went out stamped with whatever
+    // another connection last set - i.e. attributed to the wrong user. Take the
+    // same guard and set the same state as handle_mouse_, in the same lock order
+    // (INPUT_SERIALIZE before ENIGO).
+    #[cfg(windows)]
+    let _input_guard = INPUT_SERIALIZE.lock().unwrap();
+    #[cfg(windows)]
+    {
+        ENIGO.lock().unwrap().set_current_conn_id(Some(conn));
+    }
+
     match &evt.union {
         Some(TouchEvent(evt)) => match &evt.union {
             Some(ScaleUpdate(_scale_evt)) => {
