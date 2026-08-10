@@ -3,6 +3,7 @@
 
 use hbb_common::log;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::ffi::CString;
@@ -92,6 +93,49 @@ lazy_static::lazy_static! {
     static ref CONNECTED_USERS_COUNT: Mutex<usize> = Mutex::new(0);
 }
 
+/// Guards against duplicate re-registration threads (Finding 11).
+static REREGISTER_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+/// Set once the window class has been registered (Finding 12).
+///
+/// `RegisterClassExA` fails with ERROR_CLASS_ALREADY_EXISTS on a second call, so
+/// re-initialising after a shutdown used to fail outright.
+static CLASS_REGISTERED: AtomicBool = AtomicBool::new(false);
+
+// ---------------------------------------------------------------------------
+// Poison-tolerant lock helpers (Finding 9)
+//
+// These were `.lock().unwrap()` throughout, which panics if the mutex is poisoned
+// - i.e. if any thread ever panicked while holding it. That mattered because
+// window_proc is a Windows callback: unwinding a panic out of an `extern "system"`
+// function across the FFI boundary is undefined behaviour, so one unrelated panic
+// could turn every subsequent MouseMux message into UB.
+//
+// Recovering the guard is strictly safer than propagating here. The protected data
+// is a connection map, a window handle and a counter; a partially-applied update to
+// those is benign, and the alternative is aborting the process or invoking UB.
+// ---------------------------------------------------------------------------
+
+#[inline]
+fn lock_state() -> std::sync::MutexGuard<'static, MouseMuxState> {
+    MOUSEMUX_STATE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+#[inline]
+fn lock_users_count() -> std::sync::MutexGuard<'static, usize> {
+    CONNECTED_USERS_COUNT.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+#[inline]
+fn lock_main_hwnd() -> std::sync::MutexGuard<'static, Option<SendSyncHwnd>> {
+    MAIN_WINDOW_HWND.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+#[inline]
+fn lock_loop_handle() -> std::sync::MutexGuard<'static, Option<thread::JoinHandle<()>>> {
+    MESSAGE_LOOP_HANDLE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Window procedure callback - handles messages from MouseMux
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
@@ -116,7 +160,16 @@ unsafe extern "system" fn window_proc(
         MOUSEMUX_STARTUP_BROADCAST => {  // WM_APP+100 - MouseMux startup broadcast
             log::info!("MouseMux v2.2 protocol: Received MOUSEMUX_STARTUP_BROADCAST - MouseMux is available");
 
-            // Re-register RustDesk with MouseMux
+            // Finding 11: this used to spawn a thread unconditionally. MouseMux
+            // broadcasts to every listener, and nothing stops it broadcasting
+            // repeatedly (restart loop, multiple instances), so each one spawned
+            // another sleeping thread that then re-registered every connection.
+            // Collapse concurrent broadcasts into a single in-flight re-registration.
+            if REREGISTER_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+                log::info!("MouseMux v2.2 protocol: Re-registration already in flight, ignoring duplicate broadcast");
+                return 0;
+            }
+
             std::thread::spawn(|| {
                 // Small delay to let MouseMux finish initialization
                 std::thread::sleep(std::time::Duration::from_millis(100));
@@ -124,6 +177,8 @@ unsafe extern "system" fn window_proc(
 
                 // Re-request IDs for all active connections
                 re_request_all_active_connections();
+
+                REREGISTER_IN_FLIGHT.store(false, Ordering::SeqCst);
             });
             0
         }
@@ -140,7 +195,10 @@ unsafe extern "system" fn window_proc(
             );
 
             // Store mouse ID in connection state
-            if let Ok(mut state) = MOUSEMUX_STATE.lock() {
+            {
+                // lock_state() recovers from poisoning; the previous
+                // `if let Ok(..)` silently skipped ID assignment instead.
+                let mut state = lock_state();
                 // Get peer_info before mutable borrow
                 let peer_info = state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default();
                 let entry = state.connections
@@ -181,7 +239,10 @@ unsafe extern "system" fn window_proc(
             );
 
             // Store keyboard ID in connection state
-            if let Ok(mut state) = MOUSEMUX_STATE.lock() {
+            {
+                // lock_state() recovers from poisoning; the previous
+                // `if let Ok(..)` silently skipped ID assignment instead.
+                let mut state = lock_state();
                 // Get peer_info before mutable borrow
                 let peer_info = state.pending_peer_info.get(&conn_id).cloned().unwrap_or_default();
                 let entry = state.connections
@@ -222,14 +283,18 @@ unsafe extern "system" fn window_proc(
 
             increment_connected_users();
 
-            // Verify count matches MouseMux
+            // MouseMux owns the real user table; we only mirror it. Previously a
+            // mismatch was merely logged, so a single missed or duplicated message
+            // left our counter permanently wrong with no way to recover. Reconcile
+            // to the authoritative value MouseMux just sent.
             let our_count = get_connected_users_count();
             if our_count != mousemux_total {
                 log::warn!(
-                    "MouseMux v2.2 protocol: User count mismatch after ADD - RustDesk: {}, MouseMux: {}",
+                    "MouseMux v2.2 protocol: User count mismatch after ADD - RustDesk: {}, MouseMux: {} - reconciling to MouseMux",
                     our_count,
                     mousemux_total
                 );
+                set_connected_users_count(mousemux_total);
             }
             0
         }
@@ -246,14 +311,16 @@ unsafe extern "system" fn window_proc(
 
             decrement_connected_users();
 
-            // Verify count matches MouseMux
+            // See MOUSEMUX_USER_ADD: MouseMux is authoritative, so reconcile rather
+            // than just warn.
             let our_count = get_connected_users_count();
             if our_count != mousemux_total {
                 log::warn!(
-                    "MouseMux v2.2 protocol: User count mismatch after REMOVE - RustDesk: {}, MouseMux: {}",
+                    "MouseMux v2.2 protocol: User count mismatch after REMOVE - RustDesk: {}, MouseMux: {} - reconciling to MouseMux",
                     our_count,
                     mousemux_total
                 );
+                set_connected_users_count(mousemux_total);
             }
             0
         }
@@ -263,7 +330,7 @@ unsafe extern "system" fn window_proc(
 
             // Reset user count to 0 as safety measure
             {
-                let mut count = CONNECTED_USERS_COUNT.lock().unwrap();
+                let mut count = lock_users_count();
                 *count = 0;
             }
             update_main_window_title();
@@ -273,9 +340,21 @@ unsafe extern "system" fn window_proc(
         MOUSEMUX_REQUEST_EXIT => {  // WM_APP+200 - MouseMux requests RustDesk to exit
             log::info!("MouseMux v2.2 protocol: Received MOUSEMUX_REQUEST_EXIT - Exiting RustDesk");
 
-            // Exit the process
-            // This will trigger cleanup handlers and gracefully shut down
-            std::process::exit(0);
+            // Finding 8: this used to call std::process::exit(0) directly here, with
+            // a comment claiming it "will trigger cleanup handlers and gracefully
+            // shut down". It does neither - process::exit runs no destructors - and
+            // it exited from inside a window procedure, so MouseMux was never told
+            // RustDesk had gone and its connection slot leaked until it noticed.
+            //
+            // Do the courtesy notify off this thread, then exit. It must not run
+            // inline: we are ON the message-loop thread, and notify_shutdown() posts
+            // to MouseMux and expects the loop to keep pumping.
+            std::thread::spawn(|| {
+                notify_shutdown();
+                log::info!("MouseMux v2.2 protocol: Shutdown notified, exiting process");
+                std::process::exit(0);
+            });
+            0
         }
 
         WM_DESTROY => {
@@ -313,12 +392,23 @@ fn create_message_window() -> Result<HWND, String> {
             hIconSm: std::ptr::null_mut(),
         };
 
-        let atom = RegisterClassExA(&wnd_class);
-        if atom == 0 {
-            return Err(format!(
-                "Failed to register window class, error: {}",
-                std::io::Error::last_os_error()
-            ));
+        // Finding 12: register the class only once per process. A window class
+        // outlives the windows created from it, so after shutdown_mousemux_window()
+        // the class is still registered and a second RegisterClassExA fails with
+        // ERROR_CLASS_ALREADY_EXISTS (1410) - which made re-initialisation fail
+        // outright rather than reusing the perfectly good existing class.
+        if !CLASS_REGISTERED.load(Ordering::SeqCst) {
+            let atom = RegisterClassExA(&wnd_class);
+            if atom == 0 {
+                const ERROR_CLASS_ALREADY_EXISTS: i32 = 1410;
+                let err = std::io::Error::last_os_error();
+                if err.raw_os_error() != Some(ERROR_CLASS_ALREADY_EXISTS) {
+                    return Err(format!("Failed to register window class, error: {}", err));
+                }
+                // Already registered by an earlier init in this process - fine.
+                log::info!("MouseMux v2.2 protocol: Window class already registered, reusing it");
+            }
+            CLASS_REGISTERED.store(true, Ordering::SeqCst);
         }
 
         // Create hidden top-level window (NOT message-only, so MouseMux can find it)
@@ -393,7 +483,7 @@ pub fn init_mousemux_window() -> Result<(), String> {
 
         // Store HWND and signal success
         {
-            let mut state = MOUSEMUX_STATE.lock().unwrap();
+            let mut state = lock_state();
             state.hwnd = Some(SendSyncHwnd(hwnd));
         }
         tx.send(Ok(())).ok();
@@ -405,7 +495,7 @@ pub fn init_mousemux_window() -> Result<(), String> {
     // Wait for window creation to complete
     match rx.recv() {
         Ok(Ok(())) => {
-            let hwnd = MOUSEMUX_STATE.lock().unwrap().hwnd;
+            let hwnd = lock_state().hwnd;
             log::info!("MouseMux v2.2 protocol: Message window initialized successfully: {:?}", hwnd);
         }
         Ok(Err(e)) => {
@@ -417,7 +507,7 @@ pub fn init_mousemux_window() -> Result<(), String> {
     }
 
     // Store thread handle
-    *MESSAGE_LOOP_HANDLE.lock().unwrap() = Some(handle);
+    *lock_loop_handle() = Some(handle);
 
     Ok(())
 }
@@ -428,7 +518,7 @@ pub fn shutdown_mousemux_window() {
 
     // Get HWND
     let hwnd = {
-        let state = MOUSEMUX_STATE.lock().unwrap();
+        let state = lock_state();
         state.hwnd
     };
 
@@ -445,13 +535,13 @@ pub fn shutdown_mousemux_window() {
     }
 
     // Wait for thread to exit
-    if let Some(handle) = MESSAGE_LOOP_HANDLE.lock().unwrap().take() {
+    if let Some(handle) = lock_loop_handle().take() {
         handle.join().ok();
     }
 
     // Clear state
     {
-        let mut state = MOUSEMUX_STATE.lock().unwrap();
+        let mut state = lock_state();
         state.hwnd = None;
         state.connections.clear();
         state.pending_peer_info.clear();
@@ -462,12 +552,12 @@ pub fn shutdown_mousemux_window() {
 
 /// Get RustDesk's message window HWND
 pub fn get_rustdesk_hwnd() -> Option<HWND> {
-    MOUSEMUX_STATE.lock().unwrap().hwnd.map(|SendSyncHwnd(h)| h)
+    lock_state().hwnd.map(|SendSyncHwnd(h)| h)
 }
 
 /// Get IDs for a specific connection
 pub fn get_ids_for_connection(conn_id: i32) -> Option<(u32, u32)> {
-    let state = MOUSEMUX_STATE.lock().unwrap();
+    let state = lock_state();
     state.connections.get(&conn_id).and_then(|conn| {
         match (conn.mouse_id, conn.keyboard_id) {
             (Some(m), Some(k)) => Some((m, k)),
@@ -478,7 +568,7 @@ pub fn get_ids_for_connection(conn_id: i32) -> Option<(u32, u32)> {
 
 /// Clear IDs for a specific connection
 pub fn clear_ids_for_connection(conn_id: i32) {
-    let mut state = MOUSEMUX_STATE.lock().unwrap();
+    let mut state = lock_state();
     if state.connections.remove(&conn_id).is_some() {
         log::info!("MouseMux v2.2 protocol: Cleared IDs for conn_id {}", conn_id);
         drop(state); // Release lock before syncing
@@ -490,7 +580,7 @@ pub fn clear_ids_for_connection(conn_id: i32) {
 
 /// Check if a connection has IDs assigned
 pub fn has_ids_for_connection(conn_id: i32) -> bool {
-    let state = MOUSEMUX_STATE.lock().unwrap();
+    let state = lock_state();
     state.connections.get(&conn_id)
         .map(|conn| conn.mouse_id.is_some() && conn.keyboard_id.is_some())
         .unwrap_or(false)
@@ -498,7 +588,7 @@ pub fn has_ids_for_connection(conn_id: i32) -> bool {
 
 /// Check if ANY connection currently has IDs assigned (for UI status)
 pub fn has_ids() -> bool {
-    let state = MOUSEMUX_STATE.lock().unwrap();
+    let state = lock_state();
     state.connections.iter().any(|(_, conn)| {
         conn.mouse_id.is_some() && conn.keyboard_id.is_some()
     })
@@ -506,13 +596,13 @@ pub fn has_ids() -> bool {
 
 /// Set the main Sciter window HWND (call this from UI initialization)
 pub fn set_main_window_hwnd(hwnd: HWND) {
-    *MAIN_WINDOW_HWND.lock().unwrap() = Some(SendSyncHwnd(hwnd));
+    *lock_main_hwnd() = Some(SendSyncHwnd(hwnd));
     log::info!("MouseMux: Main window HWND set to {:?}", hwnd);
 }
 
 /// Update the main window title (no user count displayed here anymore)
 fn update_main_window_title() {
-    let hwnd = *MAIN_WINDOW_HWND.lock().unwrap();
+    let hwnd = *lock_main_hwnd();
 
     if let Some(SendSyncHwnd(hwnd)) = hwnd {
         unsafe {
@@ -525,7 +615,7 @@ fn update_main_window_title() {
 
 /// Increment connected users count and update window title
 pub fn increment_connected_users() {
-    let mut count = CONNECTED_USERS_COUNT.lock().unwrap();
+    let mut count = lock_users_count();
     *count += 1;
     drop(count);  // Release lock before updating title
     update_main_window_title();
@@ -533,7 +623,7 @@ pub fn increment_connected_users() {
 
 /// Decrement connected users count and update window title
 pub fn decrement_connected_users() {
-    let mut count = CONNECTED_USERS_COUNT.lock().unwrap();
+    let mut count = lock_users_count();
     if *count > 0 {
         *count -= 1;
     }
@@ -699,7 +789,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
     // When MouseMux starts later and sends WM_APP+100, re_request_all_active_connections()
     // will find this connection in the HashMap and request IDs for it
     {
-        let mut state = MOUSEMUX_STATE.lock().unwrap();
+        let mut state = lock_state();
         state.pending_peer_info.insert(conn_id, peer_info.to_string());
 
         // Create or update connection entry with peer_info
@@ -857,7 +947,7 @@ pub fn request_ids(conn_id: i32, peer_info: &str) -> bool {
 pub fn release_ids(conn_id: i32) -> bool {
     // Check if we have IDs to release
     let has_ids = {
-        let state = MOUSEMUX_STATE.lock().unwrap();
+        let state = lock_state();
         state.connections.contains_key(&conn_id)
     };
 
@@ -880,7 +970,7 @@ pub fn release_ids(conn_id: i32) -> bool {
     clear_ids_for_connection(conn_id);
 
     // Also remove from pending_peer_info
-    MOUSEMUX_STATE.lock().unwrap().pending_peer_info.remove(&conn_id);
+    lock_state().pending_peer_info.remove(&conn_id);
 
     // Local state is now clean; notify MouseMux only if it is actually running.
     let mousemux_hwnd = match find_mousemux_window() {
@@ -928,7 +1018,7 @@ fn re_request_all_active_connections() {
     
     // Get list of connections that have peer_info
     let connections_to_reregister: Vec<(i32, String)> = {
-        let state = MOUSEMUX_STATE.lock().unwrap();
+        let state = lock_state();
         state.connections
             .iter()
             .map(|(conn_id, conn)| (*conn_id, conn.peer_info.clone()))
@@ -958,5 +1048,14 @@ fn re_request_all_active_connections() {
 
 /// Get the current number of connected users for display in UI
 pub fn get_connected_users_count() -> usize {
-    *CONNECTED_USERS_COUNT.lock().unwrap()
+    *lock_users_count()
+}
+
+/// Force the user count to MouseMux's authoritative value.
+///
+/// Used to reconcile after a USER_ADD/USER_REMOVE mismatch: MouseMux owns the real
+/// user table, so its number wins rather than our incrementally-maintained one.
+fn set_connected_users_count(count: usize) {
+    *lock_users_count() = count;
+    update_main_window_title();
 }
