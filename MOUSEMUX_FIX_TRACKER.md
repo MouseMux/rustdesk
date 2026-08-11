@@ -886,3 +886,70 @@ Also on 2026-08-09: rebuilt Flutter shell successfully (35.7s) but `--skip-cargo
 in `build.bat` means `librustdesk.dll` was **not** recompiled — it remains the
 2026-02-10 binary. Any fix to Rust code requires dropping `--skip-cargo` or
 running `cargo build --features flutter --lib --release` separately.
+
+---
+
+## 2026-08-11 — live loopback test, two failures, one of them ours
+
+First end-to-end run against a real MouseMux V3 3.0.10 (loopback: host with
+`direct-server='Y'`, client via `--connect 127.0.0.1`). RustDesk's own log looked
+perfect — `peer_info 'Dev@530804584'`, protocol 123, 13 chars + null terminator,
+`rustdesk_hwnd=592830` — and yet no hardware IDs came back. The MouseMux log in
+`Documents/MouseMux V3/user/logs/` gave both reasons.
+
+**1. Protocol 123 rejected — stale MouseMux binary, not a code defect.**
+
+    rustdesk_validation.c:269  proto 123 range 121-122
+    rustdesk_receiver.c:32     r2m.connection.open failed
+
+The C source already has `PROTO_VERSION_MAX = 123`; the running binary predates
+it. This cascades and is worth recognising on sight: with `connection.open`
+refused the client is never allocated, so every later name byte logs
+`r2m.connection.name ruid:105 not found`. A flood of "not found" lines is a
+symptom of a rejected open, not a naming bug. Fix = rebuild MouseMux.
+
+**2. HWND mismatch — our bug, introduced by the dual-window design.**
+
+    rustdesk_validation.c:249  hwnd 0x90bbe mismatch 0xd70b6a
+
+We registered two receiver windows: the versioned `mousemux-v3.rustdesk.window.query`
+(primary, reported in NOTIFY_STARTUP) and the historic `rustdesk.mousemux.window.query`
+(alias), on the theory that the alias preserved compatibility with a MouseMux that
+had not been versioned yet.
+
+That theory was wrong, and the reason generalises: **MouseMux does not just find
+RustDesk by name, it validates the handle.** `rustdesk_hwnd_rust_validate()` re-runs
+FindWindowEx and compares the result with the HWND we reported, rejecting the
+connection on any difference. Two windows means two handles, so whichever we
+report, a MouseMux that discovered the other refuses us. The alias could never have
+worked — it only guaranteed a mismatch. Confirmed systematic: the same mismatch
+appears in an earlier session (`0x1430aba` vs `0x88a03b8`), and it fires at
+`r2m.startup`, before any connection, so it is independent of failure 1.
+
+Fixed by registering exactly one window. Both sides move to the versioned name
+together; there is no useful half-step.
+
+**Also corrected: two comments in our source asserting measured-false claims.**
+
+- "a class-only FindWindowEx search does not match these windows" — it does, when
+  the NULL is genuinely NULL. The original misdiagnosis came from a PowerShell
+  binding marshalling `$null` as `""`, which matches nothing. We still pass the
+  name as both class and title, because that is the C-side contract and it is
+  correct under either reading — but the stated reason was wrong.
+- "FindWindowEx cannot locate message-only windows" — it located MouseMux's
+  message-only query window with a NULL parent on this machine (verified: that
+  window is absent from EnumWindows, while `Shell_TrayWnd` and `mousemux-v3.hub`
+  return 0 through an HWND_MESSAGE parent). Undocumented but measured. The C side
+  hedges via `vapi_window_locate` (HWND_MESSAGE parent first, then NULL); RustDesk
+  cannot link vapi and keeps the single NULL-parent call. If it ever stops working,
+  mirror the two-step try — and note HWND_MESSAGE is `(HWND)-3`, not `+3`.
+
+Also restored `PROTOCOL_VERSION` to 123; it had been left at 122 with a
+"TEMPORARY DIAGNOSTIC" comment while narrowing failure 1.
+
+**C side: nothing to change.** `PROTO_VERSION_MAX = 123` and all three lookups
+(`rustdesk_receiver.c:128`, `rustdesk_state.c:159`, `rustdesk_validation.c:260`)
+already use `MOUSEMUX_VERSIONED_NAME_RUSTDESK_WINDOW`. It needs a rebuild only.
+
+**Retest after both rebuilds:** IDs should come back. Watch for
+`r2m.connection.open` succeeding, then `MOUSE_ID`/`KEYBOARD_ID` in RustDesk's log.

@@ -45,7 +45,7 @@ const MOUSEMUX_EXITING: u32 = WM_APP + 210;              // MouseMux is exiting 
 // validates this as a range (PROTO_VERSION_MIN=121 .. PROTO_VERSION_MAX=123 in
 // rustdesk_validation.c); a MouseMux older than that rejects 123 outright, so do
 // not raise this without the matching C-side change.
-const PROTOCOL_VERSION: u32 = 123;  // V2.3 = 123
+const PROTOCOL_VERSION: u32 = 123;
 // Reported to MouseMux in NOTIFY_STARTUP/NOTIFY_SHUTDOWN. MouseMux validates this
 // as a RANGE (VERS_MIN=100, VERS_MAX=999 in rustdesk_validation.c), not an exact
 // match, so a stale value still connects - it just misreports which RustDesk this
@@ -68,35 +68,47 @@ const RUSTDESK_VERSION: u32 = 149;  // 1.4.9 = 149
 // process was running alongside v3), so try newest first and fall back rather than
 // swapping one hardcoded name for another.
 //
-// NOTE: the RustDesk-side window is deliberately NOT versioned - the C header
-// declares it as the shared constant "rustdesk.mousemux.window.query".
+// The lookup below passes the name as BOTH class and title. That is the contract
+// on the C side (vapi_window_locate), not a workaround: every MouseMux IPC window
+// is created with class == title == name, and callers must never pass NULL for one
+// of them. A binding that marshals a null string as "" matches nothing, and chasing
+// that artifact is what previously produced the false conclusion that a class-only
+// search cannot find these windows - it can; the empty string could not.
+//
+// MouseMux's query window is message-only (it does not appear in EnumWindows), yet
+// a NULL-parent FindWindowEx still finds it. That is measured on a live system, and
+// undocumented by Microsoft. vapi_window_locate hedges by trying an HWND_MESSAGE
+// parent first and falling back to NULL; RustDesk cannot link vapi, so it keeps the
+// single NULL-parent call. If that ever stops working, mirror the two-step try -
+// and note HWND_MESSAGE is (HWND)-3, not +3.
 const MOUSEMUX_WINDOW_CLASSES: &[&str] = &[
     "mousemux-v3.main.window.query",
     "mousemux-v2.main.window.query",
     "mousemux.main.window.query", // legacy / unversioned
 ];
 
-// RustDesk's receiver window(s).
+// RustDesk's receiver window.
 //
 // Naming standard: <slug>.<component>.<kind>[.<qualifier>] - all lowercase, dots as
 // the only separator, hyphens only inside a token, slug always first so that
 // "mousemux-v3.*" selects everything belonging to one MouseMux version.
 //
-// PRIMARY conforms to that standard. LEGACY is the historic name, which put the
-// component first and carried no version. It is still registered because MouseMux
-// discovers RustDesk BY NAME in three places - rustdesk_receiver.c:122,
-// rustdesk_state.c:157, rustdesk_validation.c:245 - all hardcoded to the legacy
-// constant MOUSEMUX_SHARED_NAME_RUSTDESK_WINDOW. Registering only the new name
-// would leave the currently shipping MouseMux unable to find RustDesk at all.
+// EXACTLY ONE window may carry this role. An earlier revision also registered the
+// historic unversioned name "rustdesk.mousemux.window.query" as an alias, intending
+// to stay compatible with a MouseMux that had not been versioned yet. That cannot
+// work, and the reason is worth keeping: MouseMux does not merely find RustDesk by
+// name, it VALIDATES the handle. rustdesk_hwnd_rust_validate() re-runs the lookup
+// and compares the result against the HWND we reported in NOTIFY_STARTUP, rejecting
+// the connection if they differ. Two windows means two handles, so whichever one we
+// report, a MouseMux that discovered the other refuses us:
+//     rustdesk_validation.c: hwnd 0x90bbe mismatch 0xd70b6a
+// Adding an alias therefore buys no backward compatibility - it only guarantees a
+// mismatch. Register one name; both sides move to the versioned name together.
 //
-// Both windows route to the same window_proc, so MouseMux may address either. The
-// PRIMARY handle is what NOTIFY_STARTUP reports, so MouseMux ends up holding the
-// new one either way. Delete LEGACY once those three C call sites are versioned.
-//
-// Class and title are deliberately identical: MouseMux searches with FindWindowEx
-// passing both, and a class-only search does not match these windows.
+// Class and title are deliberately identical - see the note on MOUSEMUX_WINDOW_CLASSES.
+// The window is top-level (parent NULL), not message-only: that is the contract for
+// the RustDesk side, and rustdesk_validation.c searches for it with a NULL parent.
 const WINDOW_CLASS_PRIMARY: &str = "mousemux-v3.rustdesk.window.query\0";
-const WINDOW_CLASS_LEGACY: &str = "rustdesk.mousemux.window.query\0";
 
 // Peer info max length
 const MAX_PEER_INFO_LENGTH: usize = 256;
@@ -431,24 +443,18 @@ unsafe extern "system" fn window_proc(
     }
 }
 
-/// Create hidden top-level window for receiving MouseMux messages
-/// NOTE: Not a message-only window (HWND_MESSAGE) because MouseMux needs to find it
-/// via FindWindowEx. Class and title are deliberately the same string - MouseMux
-/// searches with both, and a class-only search does not match these windows.
+/// Create the hidden top-level window that receives MouseMux messages.
+///
+/// Deliberately top-level (parent NULL), not message-only: MouseMux looks for the
+/// RustDesk window with a NULL-parent FindWindowEx. Exactly one such window exists
+/// per process - see WINDOW_CLASS_PRIMARY for why an alias cannot be added.
 fn create_message_window() -> Result<HWND, String> {
-    // The primary window's HWND is the one reported to MouseMux in NOTIFY_STARTUP.
-    let primary = create_one_window(WINDOW_CLASS_PRIMARY, true)?;
-    // Best-effort: a failure here only costs compatibility with older MouseMux,
-    // so log it rather than failing initialisation outright.
-    if let Err(e) = create_one_window(WINDOW_CLASS_LEGACY, false) {
-        log::warn!("MouseMux v2.2 protocol: legacy alias window not created: {}", e);
-    }
-    Ok(primary)
+    create_one_window(WINDOW_CLASS_PRIMARY)
 }
 
-/// Register (once) and create one receiver window for the given class string.
+/// Register (once) and create the receiver window for the given class string.
 /// `class` must be NUL-terminated; class and title are the same string.
-fn create_one_window(class: &str, is_primary: bool) -> Result<HWND, String> {
+fn create_one_window(class: &str) -> Result<HWND, String> {
     unsafe {
         let class_name = class.as_ptr() as *const i8;
 
@@ -483,10 +489,10 @@ fn create_one_window(class: &str, is_primary: bool) -> Result<HWND, String> {
             // Already registered by an earlier init in this process - reuse it.
         }
 
-        // Create hidden top-level window (NOT message-only, so MouseMux can find it)
-        // CRITICAL: MouseMux needs to find this window using FindWindowEx, which cannot
-        // locate message-only windows (HWND_MESSAGE parent). Therefore, we create a
-        // normal hidden window (parent = NULL) that is findable but not visible.
+        // Hidden but top-level: parent NULL, no WS_VISIBLE. The RustDesk-side window
+        // is contractually top-level (rustdesk_validation.c searches for it with a
+        // NULL parent and notes it "belongs to the external RustDesk client"), so do
+        // not "optimise" this into an HWND_MESSAGE window.
         let window_title = class_name; // title == class, see the note on the constants
         let hwnd = CreateWindowExA(
             0,                      // dwExStyle
@@ -508,8 +514,7 @@ fn create_one_window(class: &str, is_primary: bool) -> Result<HWND, String> {
         }
 
         log::info!(
-            "MouseMux v2.2 protocol: Created {} receiver window '{}' HWND: {:?}",
-            if is_primary { "primary" } else { "legacy-alias" },
+            "MouseMux v2.2 protocol: Created receiver window '{}' HWND: {:?}",
             class.trim_end_matches('\0'),
             hwnd
         );
@@ -748,15 +753,20 @@ fn find_mousemux_window() -> Option<HWND> {
             let Ok(class_name) = CString::new(*class) else {
                 continue;
             };
-            // MUST pass the window TITLE as well as the class.
+            // Pass the name as BOTH class and title - that is the MouseMux lookup
+            // contract, and it is what the C side does.
             //
-            // Searching by class alone returns NULL for these windows - verified on a
-            // live system for BOTH MouseMux's window and our own:
-            //     FindWindowEx(NULL, NULL, "mousemux-v3.main.window.query", NULL)  -> 0
-            //     FindWindowEx(NULL, NULL, "mousemux-v3.main.window.query",
-            //                              "mousemux-v3.main.window.query")        -> found
-            // The previous code called FindWindowA(class, NULL), so it could never
-            // locate MouseMux regardless of which class name it tried.
+            // Do not "simplify" this to a class-only search on the grounds that a
+            // NULL title matches any title. It does, and a class-only call does find
+            // these windows when the NULL really is NULL - that was measured. The
+            // hazard is that a NULL string passed through any binding that marshals
+            // it as an empty string silently matches nothing, which is how this call
+            // was misdiagnosed once already. Passing the name twice is correct under
+            // both readings, so there is no reason to rely on the subtler one.
+            //
+            // The original bug here was not the title argument at all: the old code
+            // searched for the UNVERSIONED class name, which no MouseMux V3 window
+            // has. See MOUSEMUX_WINDOW_CLASSES.
             //
             // MouseMux's own C code does the same thing (rustdesk_receiver.c):
             //     FindWindowEx(NULL, NULL, MOUSEMUX_VERSIONED_NAME_MAIN_WINDOW_QUERY,
