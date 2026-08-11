@@ -1160,3 +1160,43 @@ version and its own range at that moment). Caveat - like a "rejected" M2R
 message, this can only help FUTURE mismatches, because the MouseMux that needs to
 warn is the one already shipped. Only the legacy scan addresses the case in
 question, and only if it ships before the next naming change.
+
+### 2026-08-11 — correction: app.json cannot be trusted for version gating
+
+Proposed gating the "outdated RustDesk" check on the app catalog's declared
+version (`app.json` -> `info.make`, compared with the existing
+`compare_version()` in app_catalog.c, hooked into the `need_rustdesk()` handler
+that already runs before launch). That looked cheap and idiomatic. It is wrong.
+
+Old app bundles are never removed, and their metadata goes stale independently of
+the binary beside it:
+
+| location | app.json `make` | dated | rustdesk.exe |
+|----------|-----------------|-------|--------------|
+| `store/3.0.11/depot/native-rustdesk` | 2.2.56 | 2026-08-10 | (none) |
+| `store/apps/native/3.0.7/native-rustdesk` | 2.2.23 | 2026-02-03 | replaced 2026-08-11 |
+
+The installed app.json still declares February's 2.2.23 while its rustdesk.exe was
+replaced the same day. app.json can therefore MISDESCRIBE the binary next to it -
+not merely lag it.
+
+The exe's own version resource is real (installed: `1.4.3+61`; our new build:
+`1.4.9+67`; note librustdesk.dll carries NO version resource, so do not read it).
+But it reports the UPSTREAM version only. Stock 1.4.9 built without MouseMux
+patches reports the same string as ours, so it cannot establish protocol support
+either.
+
+**Ground truth is the window name.** A pre-versioning build registers
+`rustdesk.mousemux.window.query`; a current build registers
+`mousemux-v3.rustdesk.window.query`. The running process asserts its own protocol
+era by the name it registers - nothing to go stale, no metadata involved.
+
+This works only because the legacy alias was REMOVED on 2026-08-11. Had RustDesk
+kept registering both names, old and new builds would be indistinguishable by
+scan. The alias removal is what makes the detection unambiguous.
+
+Final shape: FindWindowEx on the legacy name = definitive detection of a running
+incompatible RustDesk. HWND -> PID -> exe path -> GetFileVersionInfo only to name
+the version in the message (enrichment; detection already succeeded). The notice
+itself remains the only new work - nothing in this module surfaces anything to
+the user today.
