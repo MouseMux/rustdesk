@@ -6301,6 +6301,26 @@ impl Default for PortableState {
 
 impl Drop for Connection {
     fn drop(&mut self) {
+        // Backstop for the MouseMux IDs. on_close() is the normal release path and
+        // every ordinary ending reaches it, but it cannot run if this connection's
+        // task is cancelled or panics - Drop still does. Without this the IDs leak
+        // on BOTH sides: a stale entry in the Enigo map here, and in MouseMux a user
+        // whose slot is never returned. MouseMux allocates from a fixed slot table,
+        // so leaked slots are permanent until it restarts, and the symptom (new
+        // connections silently stop receiving hardware IDs) points nowhere near the
+        // cause. `closed` is set by on_close(), so this never double-releases.
+        #[cfg(windows)]
+        {
+            if self.authorized && !self.closed {
+                let conn_id = self.inner.id();
+                log::warn!(
+                    "#{} Connection dropped without on_close, releasing MouseMux IDs",
+                    conn_id
+                );
+                crate::platform::windows_mousemux::release_ids(conn_id);
+            }
+        }
+
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         self.release_pressed_modifiers();
 
