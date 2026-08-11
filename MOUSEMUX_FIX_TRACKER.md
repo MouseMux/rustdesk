@@ -1067,3 +1067,55 @@ Fix belongs on the C side, to keep "MouseMux is authoritative" actually true:
 send `user.del` AFTER the slot is freed, or pass `this->loop - 1`. Patching it in
 RustDesk instead would mean subtracting one from a value the protocol defines as
 a total, which encodes the quirk in both codebases.
+
+### 2026-08-11 — version-mismatch behaviour: there is no dialog, anywhere
+
+Fixed the user-count off-by-one on the C side (both call sites):
+`rustdesk_handler.c` now sends the post-decrement count on close, and
+`rustdesk_receiver.c` counts down across the shutdown loop instead of sending the
+unchanged total for every client. Needs a MouseMux rebuild.
+
+**Question asked: what happens when versions do not match, and is there a dialog?**
+
+Answer: no dialog, no toast, no UI indication on EITHER side. Every mismatch is
+log-only, and the degradation is silent. Verified by inspection - no
+dialog/msgbox/popup/toast/balloon call exists anywhere in the MouseMux rustdesk
+module, and RustDesk surfaces nothing to Flutter except
+`main_get_connected_users_count()`.
+
+The three cases:
+
+1. **Old RustDesk (proto 121/122) + new MouseMux.** The protocol RANGE accepts
+   it (121-123), so the version itself is fine. But since we versioned the window
+   names, the two can no longer FIND each other: old RustDesk registers
+   `rustdesk.mousemux.window.query` and looks for `mousemux.main.window.query`;
+   new MouseMux registers `mousemux-v3.main.window.query` and looks for
+   `mousemux-v3.rustdesk.window.query`. Mutual invisibility. RustDesk logs
+   "MouseMux window not found" and carries on as plain RustDesk.
+
+2. **New RustDesk (123) + old MouseMux (max 122).** What we hit this morning.
+   MouseMux logs `proto 123 range 121-122` and refuses `connection.open`.
+   RustDesk never receives IDs, keeps `mouse=None, keyboard=None`, and injects
+   input UNSTAMPED - so remote control still works, but every remote user shares
+   the one system cursor. Nothing tells the user their multi-user routing is off.
+
+3. **Much older RustDesk (<121).** Rejected by range, log only.
+
+Case 2 is the dangerous one: it looks like success. The product appears to work
+and only the feature that justifies this fork is silently absent.
+
+**Recommended, not yet implemented:**
+
+- *MouseMux side (best leverage).* MouseMux already knows RustDesk's version from
+  NOTIFY_STARTUP (`vers:149`) and knows its own accepted range, so it can show a
+  notification in its own UI - "RustDesk 1.4.9 speaks protocol 123, this MouseMux
+  supports up to 122; update MouseMux" - with no protocol change at all. This is
+  the only side that has both numbers at the moment of rejection.
+- *RustDesk side.* Today there is no timeout: if the MouseMux window is found and
+  REQUEST_CONNECTION is sent but IDs never arrive, nothing is logged. A timeout
+  (~2s) that logs a WARN would turn a silent failure into a diagnosable one,
+  since finding the window proves MouseMux is installed and running.
+
+Adding a "rejected" M2R message would NOT help the case that matters - an old
+MouseMux cannot send a message it does not know about, which is precisely the
+version that needs to report the problem.
