@@ -953,3 +953,117 @@ already use `MOUSEMUX_VERSIONED_NAME_RUSTDESK_WINDOW`. It needs a rebuild only.
 
 **Retest after both rebuilds:** IDs should come back. Watch for
 `r2m.connection.open` succeeding, then `MOUSE_ID`/`KEYBOARD_ID` in RustDesk's log.
+
+### 2026-08-11, later — full-flow verification with real remote users
+
+Both sides rebuilt (RustDesk 1.4.9-mousemux-v3.1, MouseMux 3.0.11 debug). Three
+concurrent connections, two of them genuine remote peers over relay:
+
+| conn_id | peer name | mouse hwid | kb hwid | MouseMux user |
+|---------|-----------|-----------|---------|---------------|
+| 1077 | `Dev@530804584` (loopback) | 0x6003 | 0x6004 | 7 Purple |
+| 1080 | `SYSTEM@158254826` (remote) | 0x6005 | 0x6006 | 8 Maroon |
+| 1081 | `Dev@1736929465` (remote) | 0x6007 | 0x6008 | 9 Fuchsia |
+
+Every stage that failed on 2026-08-11 morning now passes: `connection.open`
+accepted at proto 123, names decoded intact, `connection.ready` validated the
+HWND with no mismatch, IDs returned and reached Enigo (`HashMap now contains 3
+entries`), and MouseMux mapped each connection to a distinct user with its own
+cursor position.
+
+**The decisive evidence that routing works end to end** — a real click from the
+remote peer, not a synthetic message:
+
+    14:43:46  emu_button: mintty.exe=switched-click
+    14:43:46  user 'Maroon' became root
+
+Cursor positions stay separate per user (`Maroon pos:(944,970)`,
+`Fuchsia pos:(1279,3)`), which is the whole point of the integration.
+
+**Note on emulating a remote peer.** Synthetic `WM_MOUSEMOVE` posted to the
+client's remote-view window does nothing - Flutter's embedder tracks real pointer
+state and ignores posted messages with no cursor behind them. A protocol-level
+injector is feasible (`Client::start` returns a fully-handshaked `Stream` and
+`client::handle_hash` is a reusable `pub` helper), but `mod client` is private in
+lib.rs, so it would need a bin plus an export change. Connecting a second machine
+is zero-code and more faithful; prefer it.
+
+**GAP FOUND - MouseMux IDs are not released if a connection dies abnormally.**
+
+`release_ids()` has exactly one caller: `on_close()` in connection.rs:4819,
+guarded by `if self.authorized`. That guard is right (unauthorized connections
+never got IDs - verified: conns #1076 and #1078 closed with zero releases and
+correctly held no IDs). Every normal termination path reaches `on_close`,
+including the catch-all at connection.rs:1154.
+
+But `impl Drop for Connection` (connection.rs:6302) does NOT release IDs - it
+only releases pressed modifiers, joins the terminal service and closes a token.
+So if the connection task is cancelled or panics, `on_close` never runs, `Drop`
+runs instead, and the IDs leak on BOTH sides: a stale entry in RustDesk's Enigo
+HashMap and a phantom user in MouseMux that never goes away.
+
+Not yet observed in practice, and narrow - but the failure mode is silent and
+permanent, which is exactly the kind that surfaces as "MouseMux slowly fills up
+with dead users". Fix would be to make `Drop` a backstop that calls
+`release_ids()` when `authorized && !closed`.
+
+**Untested:** the release path itself. No `RELEASE_CONNECTION` has ever been
+observed, because no authorized connection has been closed yet. Worth exercising
+deliberately before shipping.
+
+**Log noise, not a defect:** `no user found yet` fires on every connection at
+`rustdesk_handler.c:292`, ~20ms before the mapping lands. Harmless but misleading
+when reading logs. Likewise RustDesk's `Error of monitor0 service: SWITCH` and
+`display service: new subscriber` are normal on a new subscriber, and the failed
+accepts from 87.215.158.135 are direct-connect attempts that preceded a
+successful relay connection.
+
+### 2026-08-11 — release path verified, and an off-by-one in the user count
+
+**Release path works.** Both remote users disconnected deliberately; the full
+teardown ran on each:
+
+    #1080 Connection closing, releasing MouseMux IDs
+          MOUSEMUX_RELEASE_CONNECTION - Posted to MouseMux window 0x801c8
+    MM    r2m.connection.close -> client free slot:1 ruid:1080
+          sending M2R user.del ruid:1080
+    #1080 MOUSEMUX_USER_REMOVE
+
+Slots freed (1 and 2 returned), users unmapped, Enigo HashMap wound 3 -> 2 -> 1.
+No leak on the normal path. This closes the "release path never exercised" item;
+the `Drop` backstop below is still worth adding for ABNORMAL termination, which
+remains untested and unprotected.
+
+**NEW FINDING - user count is reported one too high on removal.**
+
+`M2R_USER_DEL` carries `this->loop` ("Active client count", local.h:157) as its
+lparam. The ordering differs between add and remove:
+
+- add: `rustdesk_state.c:219` increments `loop`, THEN `rustdesk_handler.c:303`
+  sends `user.add` -> post-increment, correct.
+- del: `rustdesk_handler.c:329` sends `user.del`, THEN `rustdesk_state.c:260`
+  decrements `loop` -> pre-decrement, one too high.
+
+Observed: adds carried 1, 2, 3 (correct); dels carried 3 then 2, where the true
+remaining counts were 2 then 1.
+
+The consequence is worse than a wrong log line, because our side treats MouseMux
+as authoritative and *reconciles to it* (windows_mousemux.rs:390):
+
+    User count mismatch after REMOVE - RustDesk: 2, MouseMux: 3 - reconciling to MouseMux
+
+RustDesk decrements correctly, sees a mismatch, and overwrites its correct value
+with the inflated one. The warning then fires only ONCE - on the next removal our
+inflated count happens to equal MouseMux's inflated count, so it looks like
+agreement and the bug goes silent. Final state after both disconnects: RustDesk
+believes 2 users are connected while only 1 is.
+
+Impact is display-only - `CONNECTED_USERS_COUNT` feeds
+`main_get_connected_users_count()` (Flutter) and `update_main_window_title()`,
+not input routing. But it is sticky: once every user leaves, the last del reports
+1, so RustDesk shows one phantom user indefinitely.
+
+Fix belongs on the C side, to keep "MouseMux is authoritative" actually true:
+send `user.del` AFTER the slot is freed, or pass `this->loop - 1`. Patching it in
+RustDesk instead would mean subtracting one from a value the protocol defines as
+a total, which encodes the quirk in both codebases.
