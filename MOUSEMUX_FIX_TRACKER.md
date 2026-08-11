@@ -1200,3 +1200,50 @@ incompatible RustDesk. HWND -> PID -> exe path -> GetFileVersionInfo only to nam
 the version in the message (enrichment; detection already succeeded). The notice
 itself remains the only new work - nothing in this module surfaces anything to
 the user today.
+
+### 2026-08-11 — correction: RustDesk DOES report its version; back-compat is recoverable
+
+Earlier framing ("MouseMux cannot know the version") was wrong, and so was
+rejecting the legacy-listener idea as a "doomed handshake". Both corrected here.
+
+RustDesk has always reported its version in the protocol:
+- `NOTIFY_STARTUP` wparam = app version (`RUSTDESK_VERSION`, 149 for 1.4.9)
+- `REQUEST_CONNECTION` lparam = protocol version (123)
+
+MouseMux receives, validates and logs both (`RustDesk-client started vers:149`,
+`ruid open ruid:1080 proto:123`). Nothing is silent. The ONLY reason an old
+RustDesk says nothing is the window-name versioning done on 2026-08-11: it
+searches for a name V3 no longer registers.
+
+Proven from the shipped 1.4.3 binary (`store/apps/native/3.0.7/.../librustdesk.dll`),
+which contains exactly two window-name strings:
+
+    mousemux.main.window.query        <- what it searches for
+    rustdesk.mousemux.window.query    <- what it registers
+
+**Back-compat is therefore recoverable from the MouseMux side alone**, by also
+registering a listener under `mousemux.main.window.query`. Full trace:
+
+1. old RustDesk finds it, sends NOTIFY_STARTUP (vers:143, its own HWND)
+2. MouseMux stores that HWND FROM THE MESSAGE - `rustdesk_transmission.c:14`
+   (`this -> hwnd.rustdesk = hwnd`), so no lookup is required to reply
+3. REQUEST_CONNECTION proto 122 - inside PROTO_VERSION_MIN/MAX (121-123) - accepted
+4. connection.ready - `rustdesk_hwnd_rust_validate()` calls `vapi_window_locate()`
+   for the VERSIONED RustDesk name, does not find it, and SKIPS the comparison,
+   returning true
+5. IDs are posted to the announced HWND -> the old client works end to end
+
+So the choice is real, not merely "warn": keep old clients working with an
+informational nudge, or accept the startup (to learn the version) and then
+deliberately refuse with a precise message.
+
+Two hazards if this route is taken:
+
+- Step 4 succeeds by ACCIDENT. "Window not found" means "no comparison performed",
+  which happens to admit old clients. Hardening that check to require the window
+  be found would silently break them. If relied on, it must be commented as
+  intentional.
+- `hwnd.rustdesk` is a SINGLE field. An old and a new RustDesk running
+  simultaneously overwrite each other, and the validation may then compare the old
+  client's HWND against the new client's window and reject it. Pre-existing, but
+  this change makes it reachable.
