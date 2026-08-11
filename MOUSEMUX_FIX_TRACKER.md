@@ -1119,3 +1119,44 @@ and only the feature that justifies this fork is silently absent.
 Adding a "rejected" M2R message would NOT help the case that matters - an old
 MouseMux cannot send a message it does not know about, which is precisely the
 version that needs to report the problem.
+
+### 2026-08-11 — design: how MouseMux can warn about an incompatible RustDesk
+
+C-side count fix was REVERTED pending a pull; patch held at
+`scratchpad/mousemux-usercount-fix.patch`, to be re-applied afterwards.
+
+Main use case to solve: MouseMux updates, the user still has an older RustDesk,
+and nothing tells them. The constraint that shapes the design:
+
+**After the window-name versioning, an old RustDesk is invisible to MouseMux.**
+Old RustDesk registers `rustdesk.mousemux.window.query` and searches for
+`mousemux.main.window.query`; new MouseMux registers/searches `mousemux-v3.*`.
+Neither finds the other, so NO protocol message is ever exchanged - no
+NOTIFY_STARTUP, no version, nothing to validate. MouseMux cannot report a
+mismatch it never observes. It must actively go looking.
+
+Design (MouseMux side):
+
+1. Keep a list of historical RustDesk window names. In `rustdesk_receiver_start()`,
+   the existing "RustDesk-client window not (yet) found" branch becomes: scan the
+   legacy names; a hit positively identifies an incompatible RustDesk.
+2. Re-scan periodically - RustDesk may start after MouseMux. `rustdesk_receiver_pump()`
+   already runs on a cycle and a FindWindowEx per legacy name is cheap.
+3. Latch a flag in `rustdesk_state_t` so the notice shows once per detection.
+4. Name the version: legacy HWND -> GetWindowThreadProcessId -> OpenProcess
+   (PROCESS_QUERY_LIMITED_INFORMATION) -> QueryFullProcessImageName ->
+   GetFileVersionInfo. "RustDesk 1.4.3 is running; this MouseMux needs 1.4.9+"
+   is actionable; a generic warning is not.
+
+Rejected alternative: have MouseMux also register the old unversioned query name
+as a beacon so old RustDesk volunteers its version via NOTIFY_STARTUP. It does
+yield the exact version for free, but it invites a handshake that is guaranteed
+to fail later at HWND validation - the same class of bug removed on 2026-08-11.
+The passive scan costs one FindWindowEx and starts nothing it cannot finish.
+
+Also worth adding, with a caveat: surface the numbers when
+`rustdesk_protocol_validate()` rejects a version (MouseMux holds both the peer
+version and its own range at that moment). Caveat - like a "rejected" M2R
+message, this can only help FUTURE mismatches, because the MouseMux that needs to
+warn is the one already shipped. Only the legacy scan addresses the case in
+question, and only if it ships before the next naming change.
